@@ -33,13 +33,16 @@ if [ "$INVOKING_USER" = "root" ]; then
 fi
 
 # ── Install base packages ──────────────────────────────────────────
-log "Installing base packages (git, curl, ca-certificates)…"
+# acl is for setfacl — grants the invoking user immediate rw on the
+# docker socket so they don't have to log out + back in before docker
+# commands work. See the socket-ACL block below.
+log "Installing base packages (git, curl, ca-certificates, acl)…"
 if [ "$DISTRO" = "debian" ]; then
     apt-get update -qq
     DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-        git curl ca-certificates gnupg lsb-release
+        git curl ca-certificates gnupg lsb-release acl
 else
-    dnf install -y -q git curl ca-certificates
+    dnf install -y -q git curl ca-certificates acl
 fi
 
 # ── Install Docker Engine ──────────────────────────────────────────
@@ -70,13 +73,34 @@ log "Enabling + starting the Docker daemon…"
 systemctl enable --now docker
 
 # ── Add the invoking user to the docker group ──────────────────────
+# Group membership is the LONG-TERM path (persists across reboots,
+# every future login shell gets it from /etc/group). But it does NOT
+# take effect in the already-running shell that invoked us — that
+# shell's credentials were frozen at login. Group fix for new shells.
 if [ "$INVOKING_USER" != "root" ]; then
     if id -nG "$INVOKING_USER" | grep -qw docker; then
         log "$INVOKING_USER already in docker group — skipping"
     else
         log "Adding $INVOKING_USER to the docker group…"
         usermod -aG docker "$INVOKING_USER"
-        warn "You MUST log out and log back in (or 'newgrp docker') before docker commands work for $INVOKING_USER."
+    fi
+fi
+
+# ── Grant the invoking user immediate socket access via ACL ────────
+# This is the "no logout required" fix. Group membership (above) only
+# matters for future shells; setfacl grants the running shell rw on
+# /var/run/docker.sock right now. ACL is cleared on reboot by systemd
+# which recreates the socket, but by then every new shell has the
+# docker group from /etc/group so we're covered either way.
+#
+# This is identical in privilege to being in the docker group — it
+# gives root-equivalent access via the daemon. We only apply it to
+# the invoking user, not world.
+if [ "$INVOKING_USER" != "root" ] && command -v setfacl >/dev/null 2>&1; then
+    if [ -S /var/run/docker.sock ]; then
+        setfacl -m "u:$INVOKING_USER:rw" /var/run/docker.sock \
+            && log "Granted $INVOKING_USER immediate docker-socket access via ACL" \
+            || warn "setfacl on /var/run/docker.sock failed — you may need to log out + back in"
     fi
 fi
 
@@ -85,15 +109,14 @@ log "Verifying installation…"
 docker --version
 docker compose version
 
-# Verify the invoking user can actually hit the docker socket. If they
-# were just added to the group, they almost certainly can't — their
-# current session's credentials don't include the new group. Call that
-# out loudly with the exact command needed instead of letting them
-# discover it at `docker compose up` time.
+# Verify the invoking user can actually hit the socket now. If the
+# ACL grant succeeded this should pass without any re-login dance.
 NEEDS_RELOGIN=0
 if [ "$INVOKING_USER" != "root" ]; then
     if ! sudo -n -u "$INVOKING_USER" docker info >/dev/null 2>&1; then
         NEEDS_RELOGIN=1
+    else
+        log "$INVOKING_USER can reach the docker daemon ✓"
     fi
 fi
 
@@ -104,21 +127,13 @@ ${RED}================================================================
 IMPORTANT — your current shell CANNOT talk to Docker yet.
 ================================================================${NC}
 
-You were added to the 'docker' group, but Linux doesn't refresh group
-membership on an already-running shell. If you run 'docker compose up'
-right now you'll get:
-
-    permission denied while trying to connect to the Docker daemon
-    socket at unix:///var/run/docker.sock
-
-Fix with EITHER:
+The ACL grant on /var/run/docker.sock didn't take effect (unusual —
+is 'acl' package installed? setfacl --version). Fall back to EITHER:
 
   ${YELLOW}• Log out and log back in${NC} (cleanest — every future shell gets it)
 
   ${YELLOW}• Or activate the group in this terminal only:${NC}
         newgrp docker
-
-  ${YELLOW}• Or prefix docker commands with sudo${NC} (works but noisy)
 
 Verify with:  ${GREEN}docker ps${NC}  (should list containers, not error)
 
