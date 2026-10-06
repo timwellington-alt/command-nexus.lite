@@ -1,0 +1,31 @@
+{
+    # Local-only mode: Caddy issues certs from its own internal CA.
+    # No Let's Encrypt, no public DNS, no Internet exposure needed.
+    # Clients need to trust Caddy's root CA to avoid browser warnings
+    # (one-time import on each device, or push via GPO/MDM).
+    #
+    # The root CA cert is auto-generated on first boot and lives at
+    #   /data/caddy/pki/authorities/local/root.crt
+    # inside the caddy container, exposed via the caddy-data volume.
+    # Fetch it with:
+    #   docker cp nexus-lite-caddy:/data/caddy/pki/authorities/local/root.crt .
+    email internal@local
+}
+
+{$DOMAIN:nexus.district.local} {
+    tls internal
+
+    reverse_proxy api:8000 {
+        header_up Host {host}
+        header_up X-Real-IP {remote}
+    }
+
+    request_body {
+        max_size 10MB
+    }
+
+    log {
+        output stdout
+        format console
+    }
+}

@@ -1,0 +1,28 @@
+{
+    email {$CADDY_ACME_EMAIL:admin@yourdistrict.org}
+
+    # DNS-01 challenge — no inbound 80/443 needed. Caddy proves domain
+    # ownership by writing a TXT record. Default: Cloudflare; swap the
+    # provider in docker/caddy-dns01/Dockerfile (DNS_PLUGIN build arg)
+    # and in the acme_dns line below.
+    #
+    # Required env var: CLOUDFLARE_API_TOKEN with Zone:DNS:Edit scope,
+    # scoped to the specific zone this cert will cover.
+    acme_dns cloudflare {$CLOUDFLARE_API_TOKEN}
+}
+
+{$DOMAIN:nexus.yourdistrict.org} {
+    reverse_proxy api:8000 {
+        header_up Host {host}
+        header_up X-Real-IP {remote}
+    }
+
+    request_body {
+        max_size 10MB
+    }
+
+    log {
+        output stdout
+        format console
+    }
+}

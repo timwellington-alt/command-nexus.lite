@@ -287,6 +287,66 @@ appliance that terminates TLS before traffic reaches this host:
 
 No Docker changes needed for this path.
 
+## Path D — Local-only (LAN deployment, no Internet exposure)
+
+For districts that want to run Nexus entirely on the internal network
+with no public DNS and no inbound Internet reachability. The included
+`docker-compose.local.yml` + `Caddyfile.local` use Caddy's internal CA
+to self-sign a cert for your LAN hostname.
+
+```bash
+# Set DOMAIN in .env to your LAN hostname, e.g. nexus.district.local
+docker compose -f docker-compose.yml -f docker-compose.local.yml up -d
+```
+
+**One-time per device**: users will see a browser "Not secure" warning
+until they trust Caddy's root CA. Fetch and distribute it with:
+
+```bash
+# Fetch the root cert from the running Caddy container
+docker cp nexus-lite-caddy:/data/caddy/pki/authorities/local/root.crt \
+    nexus-lite-root.crt
+# Push via GPO (Windows), MDM (ChromeOS/iPadOS), or install manually
+```
+
+**Google OAuth still works** because the callback URL is HTTPS even
+with a self-signed cert; Google doesn't verify the cert, only the
+scheme. Users will see the browser warning once per device until the
+root CA is trusted, but OAuth itself has zero issues.
+
+## Path E — DNS-01 (real Let's Encrypt cert, no inbound 80/443 needed)
+
+Best-of-both-worlds for LAN deployments that want a real public-CA
+cert but can't open 80/443 to the Internet. Uses Caddy's DNS-01 ACME
+challenge: Caddy proves domain ownership by writing a TXT record to
+your public DNS zone (via your DNS provider's API), gets a Let's
+Encrypt cert, no inbound ports needed.
+
+**Requirements**:
+- A public DNS zone for your DOMAIN (e.g. `nexus.yourdistrict.org`),
+  with API access on the registrar/DNS host
+- API token with permission to write TXT records on that zone
+- Split-horizon DNS: public DNS can point anywhere (even a bogus IP);
+  internal DNS resolves the hostname to this host so staff reach it
+
+Default plugin is **Cloudflare** (most common free-tier DNS). To use
+a different provider edit `docker/caddy-dns01/Dockerfile` (`DNS_PLUGIN`
+build arg) + the matching `acme_dns` line in `Caddyfile.dns01`. The
+full list of supported providers: <https://github.com/caddy-dns>
+
+```bash
+# 1. Add to .env:
+#      CADDY_ACME_EMAIL=admin@yourdistrict.org
+#      CLOUDFLARE_API_TOKEN=<token with Zone:DNS:Edit scope>
+# 2. Build + launch
+docker compose -f docker-compose.yml -f docker-compose.dns01.yml build caddy
+docker compose -f docker-compose.yml -f docker-compose.dns01.yml up -d
+```
+
+Caddy prints `certificate obtained successfully` within ~60 seconds
+(DNS propagation + ACME round-trip). Zero browser warnings for staff
+since the cert is from a public CA.
+
 # Installing on the host (~15 min)
 
 ## Prereq installer (one time, as root)

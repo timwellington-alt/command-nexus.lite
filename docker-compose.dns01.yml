@@ -1,0 +1,48 @@
+# DNS-01 override — Caddy obtains a Let's Encrypt cert via DNS
+# challenge instead of HTTP-01. Use when you want a REAL public-CA
+# cert but can't open ports 80/443 to the Internet (LAN-only
+# deployment with split-horizon DNS, or a host behind strict egress
+# controls that can still talk to the DNS API).
+#
+# Use it:
+#   # 1. Set CADDY_ACME_EMAIL + CLOUDFLARE_API_TOKEN in your .env.
+#   # 2. If you use a different DNS provider, edit DNS_PLUGIN in
+#   #    docker/caddy-dns01/Dockerfile AND the acme_dns line in
+#   #    Caddyfile.dns01 (both must match — e.g. "digitalocean").
+#   # 3. Build + bring up:
+#   docker compose -f docker-compose.yml -f docker-compose.dns01.yml build caddy
+#   docker compose -f docker-compose.yml -f docker-compose.dns01.yml up -d
+#
+# Public DNS must have an A/AAAA record for your DOMAIN pointing at
+# ANYTHING (it's not actually queried for cert validation — only the
+# TXT record Caddy writes is used). Internal DNS resolves the same
+# name to this host so staff can reach it.
+services:
+  nginx:
+    profiles: ["disabled"]
+
+  caddy:
+    build:
+      context: ./docker/caddy-dns01
+    container_name: nexus-lite-caddy
+    restart: unless-stopped
+    ports:
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN}
+      CADDY_ACME_EMAIL: ${CADDY_ACME_EMAIL:-admin@yourdistrict.org}
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
+    volumes:
+      - ./Caddyfile.dns01:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - nexus-internal
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  caddy-data:
+  caddy-config:

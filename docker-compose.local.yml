@@ -1,0 +1,45 @@
+# Local-only override — Caddy with internal-CA (self-signed) TLS.
+# Use for air-gapped / LAN-only deployments where you don't want to
+# expose anything to the Internet. Users get a one-time browser warning
+# per device unless you trust Caddy's root CA (fetch from the
+# caddy-data volume after first boot — see Caddyfile.local).
+#
+# Use it:
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up -d
+#
+# Why not just use the Caddy auto-TLS override?
+#   docker-compose.caddy.yml uses Let's Encrypt which requires public
+#   DNS + inbound 80/443 from the Internet. This override skips LE
+#   and uses Caddy's internal CA. No DNS validation, no inbound
+#   Internet reachability needed.
+#
+# Google OAuth still works because the callback URL is HTTPS, even
+# with a self-signed cert. Users will see "Not secure" in the browser
+# bar unless they trust the root CA; OAuth doesn't care.
+services:
+  nginx:
+    profiles: ["disabled"]
+
+  caddy:
+    image: caddy:2
+    container_name: nexus-lite-caddy
+    restart: unless-stopped
+    ports:
+      - "443:443"
+      # Port 80 not needed in local mode (no HTTP-01 ACME challenge).
+      # Caddy will auto-redirect HTTP → HTTPS if you add "- 80:80".
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile.local:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data       # internal CA root cert persists here
+      - caddy-config:/config
+    networks:
+      - nexus-internal
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  caddy-data:
+  caddy-config:

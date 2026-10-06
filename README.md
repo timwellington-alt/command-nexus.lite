@@ -63,7 +63,7 @@ Then log in at `https://<your-domain>/` with the admin email you seeded.
 
 ## TLS — pick one path
 
-1. **Caddy auto-TLS** (recommended; zero cert maintenance):
+1. **Caddy auto-TLS** (easiest for Internet-facing; zero cert maintenance):
    ```bash
    docker compose -f docker-compose.yml -f docker-compose.caddy.yml up -d
    ```
@@ -71,12 +71,28 @@ Then log in at `https://<your-domain>/` with the admin email you seeded.
    auto-provisions and auto-renews Let's Encrypt certs.
 
 2. **nginx + certbot**: keep the default nginx proxy, run certbot on
-   the host, point nginx at `/etc/letsencrypt/live/...`. Full commands
-   in the PDF.
+   the host, point nginx at `/etc/letsencrypt/live/...`.
 
 3. **Cloudflare Tunnel or your existing load balancer**: leave
-   nginx HTTP-only on 8080, point your edge at it. Make sure the
-   edge sends `X-Forwarded-Proto: https`.
+   nginx HTTP-only on 8080, point your edge at it with
+   `X-Forwarded-Proto: https`.
+
+4. **Local-only / LAN deployment** (no Internet exposure):
+   ```bash
+   docker compose -f docker-compose.yml -f docker-compose.local.yml up -d
+   ```
+   Caddy's internal CA self-signs a cert for your LAN hostname.
+   One-time browser warning per device (or push Caddy's root CA
+   via GPO/MDM). Google OAuth still works — the callback URL is
+   HTTPS even though the cert is self-signed.
+
+5. **DNS-01 ACME** (real Let's Encrypt cert, no inbound 80/443):
+   For LAN-only hosts that have outbound DNS-API access to their
+   registrar. Cloudflare is the default plugin; swap in any provider
+   from <https://github.com/caddy-dns>.
+
+Full commands and tradeoffs for each path in
+[docs/DISTRICT_SETUP.pdf](docs/DISTRICT_SETUP.pdf).
 
 ## Google OAuth 2.0 Client — for user Sign-In
 
