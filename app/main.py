@@ -165,6 +165,7 @@ def create_app() -> FastAPI:
         return templates.TemplateResponse("login.html", {
             "request": request,
             "local_auth_enabled": settings.local_auth_enabled,
+            "google_auth_enabled": settings.google_auth_enabled,
         })
 
     _register_routers(app)
@@ -173,8 +174,11 @@ def create_app() -> FastAPI:
 
 def _register_routers(app: FastAPI):
     """Import and mount all module routers."""
-    from app.auth.oauth import router as auth_router
-    app.include_router(auth_router)
+    # Google OAuth routes mounted only when GOOGLE_AUTH_ENABLED. Keeps
+    # the attack surface zero for districts that don't use Google SSO.
+    if get_settings().google_auth_enabled:
+        from app.auth.oauth import router as auth_router
+        app.include_router(auth_router)
 
     from app.modules.audit.router import router as audit_router
     app.include_router(audit_router)

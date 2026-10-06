@@ -17,10 +17,12 @@ workflow, ID cards, guidance queue, attendance reporting, custom-section
 sync, provisioning, and audit logging.
 
 Everything district-specific in the original full-featured deployment
-(Paxton door access, HP ProCurve ACL editing, Grandstream phone system,
-HALO vape sensors, Wave VMS cameras) has been stripped out. The stack
-here assumes a straightforward Google Workspace + PowerSchool/MetaSolutions
-environment and configures everything else through the Settings page.
+(door access, core switch ACL editing, phone system, vape sensors,
+camera VMS) has been stripped out. The stack is auth-flexible:
+**local accounts work out of the box**, and Google Workspace SSO is a
+feature-flagged addition for districts that use it. SIS ingestion
+assumes PowerSchool-style CSV exports but the column mapping is
+configurable so other SIS platforms work with Settings-only changes.
 
 # What you'll be running
 
@@ -67,7 +69,11 @@ prompt for them.
   `googleapis.com`, `google.com`, PyPI, Docker Hub, and your MetaSolutions
   SFTP/Gmail endpoints.
 
-## Google Workspace
+## Google Workspace (OPTIONAL)
+
+Only required if you want to use Google features. Skip this entire
+subsection if you're deploying local-auth-only without Google backend
+integrations.
 
 - **Super-admin access** to your Google Workspace tenant.
 - A **project in Google Cloud Console** you can create a service account in.
@@ -109,7 +115,65 @@ Reports Nexus consumes:
 | Daily Attendance                    | Daily       | Emailed CSV                          |
 | Membership status (A/R/F/CTC/etc.)  | Daily       | Emailed CSV                          |
 
-# Google service account setup (~15 min)
+# Local auth — the default (~5 min)
+
+Email + password authentication, admin-managed. **Enabled by default**;
+set `LOCAL_AUTH_ENABLED=false` in `.env` to disable (only sensible if
+you're also enabling Google SSO as the sole auth path — the API will
+refuse to start if both are off).
+
+Local auth is the right default for most deployments. It works out
+of the box with zero external dependencies, serves as break-glass
+auth even in Google-primary shops, and lets Microsoft 365 districts
+run Nexus without Workspace at all.
+
+## Default admin on first boot
+
+If `LOCAL_AUTH_ENABLED=true` AND the `local_users` table is empty,
+the API creates a default admin on first boot:
+
+| Field | Value |
+|-|-|
+| Email | `admin@local` |
+| Password | `changeme123!` |
+| `must_change_password` | `true` |
+
+The first time anyone logs in with these creds, Nexus FORCES a
+password reset before letting them reach any other page. You can
+skip this bootstrap by running `scripts/first_run.sh` with the flag
+enabled — it prompts for a real email + password and seeds that
+instead.
+
+## Managing accounts after boot
+
+**Settings → Access → Local Accounts** (admin only).
+
+Shows every local account with email, name, admin/active flags,
+last login, and a "(must change pw)" marker where applicable.
+Per-row actions:
+- **Reset pw** — prompt for a new password; user is forced to change
+  it again on next login
+- **Disable / Enable** — soft-disable without deleting (audit trail
+  preserved)
+- **Make admin / Revoke admin** — toggle the admin bit
+- **Delete** — permanent
+
+Add-account form at the bottom: email, display name, password
+(≥ 12 chars), admin checkbox.
+
+## Security defaults
+
+- argon2id password hashing (OWASP-recommended)
+- Per-email failure lockout: 5 attempts within 15 minutes → 15-minute
+  lockout. Tune via `LOCAL_AUTH_LOCKOUT_FAILURES` and
+  `LOCAL_AUTH_LOCKOUT_WINDOW_SEC` env vars if your policy differs.
+- All login attempts audit-logged (success + failure)
+- Session cookie identical to the Google flow — downstream middleware
+  can't distinguish the two auth paths
+- Admin resets automatically set `must_change_password=true` unless
+  the admin passes `skip_force_change=true` on the PATCH
+
+# Google service account setup — OPTIONAL (~15 min, only if you want Google backend features)
 
 ## 1. Create the Google Cloud project
 
@@ -155,7 +219,7 @@ privileges, then assign it to the admin mailbox Nexus will impersonate
 - Groups (read/write)
 - Reports (read)
 
-# Google OAuth 2.0 client — for user Sign-In (~5 min)
+# Google OAuth 2.0 client — OPTIONAL (~5 min, only if GOOGLE_AUTH_ENABLED=true)
 
 The **service account** above handles Nexus's backend API calls
 (Directory, Gmail, Sheets). **User login** uses a separate OAuth 2.0
@@ -228,70 +292,6 @@ chmod 600 secrets/google_client_*
 That's it — no DWD, no scopes list, no admin console changes needed
 for the OAuth client. The service account's DWD is a totally separate
 authorization that governs backend API access.
-
-# Local auth (optional, feature-flagged) — ~5 min
-
-Secondary login path alongside Google SSO. Useful for break-glass
-admin, non-Workspace users, and service accounts that need to call
-Nexus's API without Google. Google SSO stays the primary path.
-
-## Enable
-
-In `.env`:
-```
-LOCAL_AUTH_ENABLED=true
-```
-
-That's it — the login page will show a "Use a local account instead"
-toggle on next boot. Set it back to `false` to remove all local-auth
-code paths (routes, settings panel, default admin) with zero attack
-surface.
-
-## Default admin on first boot
-
-If `LOCAL_AUTH_ENABLED=true` AND the `local_users` table is empty,
-the API creates a default admin on first boot:
-
-| Field | Value |
-|-|-|
-| Email | `admin@local` |
-| Password | `changeme123!` |
-| `must_change_password` | `true` |
-
-The first time anyone logs in with these creds, Nexus FORCES a
-password reset before letting them reach any other page. You can
-skip this bootstrap by running `scripts/first_run.sh` with the flag
-enabled — it prompts for a real email + password and seeds that
-instead.
-
-## Managing accounts after boot
-
-**Settings → Access → Local Accounts** (admin only).
-
-Shows every local account with email, name, admin/active flags,
-last login, and a "(must change pw)" marker where applicable.
-Per-row actions:
-- **Reset pw** — prompt for a new password; user is forced to change
-  it again on next login
-- **Disable / Enable** — soft-disable without deleting (audit trail
-  preserved)
-- **Make admin / Revoke admin** — toggle the admin bit
-- **Delete** — permanent
-
-Add-account form at the bottom: email, display name, password
-(≥ 12 chars), admin checkbox.
-
-## Security defaults
-
-- argon2id password hashing (OWASP-recommended)
-- Per-email failure lockout: 5 attempts within 15 minutes → 15-minute
-  lockout. Tune via `LOCAL_AUTH_LOCKOUT_FAILURES` and
-  `LOCAL_AUTH_LOCKOUT_WINDOW_SEC` env vars if your policy differs.
-- All login attempts audit-logged (success + failure)
-- Session cookie identical to the Google flow — downstream middleware
-  can't distinguish the two auth paths
-- Admin resets automatically set `must_change_password=true` unless
-  the admin passes `skip_force_change=true` on the PATCH
 
 # TLS setup — pick ONE path
 

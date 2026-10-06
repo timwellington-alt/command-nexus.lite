@@ -53,15 +53,29 @@ class Settings:
         self.redis_host = os.environ.get("REDIS_HOST", "nexus-redis")
         self.redis_port = os.environ.get("REDIS_PORT", "6379")
 
-        # Google OAuth
-        self.google_client_id = _read_secret("google_client_id", "GOOGLE_CLIENT_ID")
-        self.google_client_secret = _read_secret("google_client_secret", "GOOGLE_CLIENT_SECRET")
+        # Local auth is the default auth path. Google SSO is a
+        # feature-flagged addition for districts that use Workspace.
+        # Flipped 2026-10-06: local-first is more inclusive for a
+        # template that lands in Microsoft-shop districts too.
+        self.local_auth_enabled = os.environ.get("LOCAL_AUTH_ENABLED", "true").lower() in ("1", "true", "yes", "on")
+
+        # Google OAuth for user Sign-In (OPTIONAL). When off, the
+        # /auth/login + /auth/callback routes aren't mounted and the
+        # login page hides the "Sign in with Google" button. Google
+        # Workspace is still required separately for the SERVICE
+        # ACCOUNT backend features (Directory, Gmail, Sheets); that
+        # dependency is unrelated to this flag.
+        self.google_auth_enabled = os.environ.get("GOOGLE_AUTH_ENABLED", "false").lower() in ("1", "true", "yes", "on")
+        self.google_client_id = _read_secret("google_client_id", "GOOGLE_CLIENT_ID", "")
+        self.google_client_secret = _read_secret("google_client_secret", "GOOGLE_CLIENT_SECRET", "")
         self.google_domain = os.environ.get("GOOGLE_DOMAIN", "")
 
-        # Local-auth mode (secondary; off by default). When enabled the
-        # login page gets a "Local account" tab and the /auth/local
-        # routes are registered.
-        self.local_auth_enabled = os.environ.get("LOCAL_AUTH_ENABLED", "false").lower() in ("1", "true", "yes", "on")
+        # Safety: at least one auth path must be on, else nobody can log in.
+        if not self.local_auth_enabled and not self.google_auth_enabled:
+            raise RuntimeError(
+                "FATAL: both LOCAL_AUTH_ENABLED and GOOGLE_AUTH_ENABLED are "
+                "off — nobody could log in. Enable at least one."
+            )
 
         # Settings encryption key (for integration secrets at rest)
         self.settings_encryption_key = _read_secret(

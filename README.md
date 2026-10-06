@@ -34,12 +34,14 @@ logs. A 4 GB / 40 GB / 2-core VM runs this comfortably.
 
 - Linux host with Docker Engine 24+ and Docker Compose v2
 - Domain name pointing to the host (TLS setup covered below)
-- Google Workspace super-admin access — needed for TWO separate things:
-  the service account + DWD (backend API) AND the OAuth 2.0 Client ID
-  (user Sign-In). Walkthroughs for both in `docs/DISTRICT_SETUP.pdf`
-- A SIS that emails daily CSV exports — the reference implementation
-  consumes PowerSchool exports; other SIS platforms need per-column
-  mapping configured in Settings
+- Optional: a SIS that emails daily CSV exports — the reference
+  implementation consumes PowerSchool exports; other SIS platforms
+  need per-column mapping configured in Settings
+- Optional: Google Workspace, if you want to enable:
+    - Google SSO for user Sign-In (`GOOGLE_AUTH_ENABLED=true`)
+    - Google backend features (Directory API, Gmail-based attendance
+      ingest, Sheets custom-sections sync) — requires a service
+      account + DWD regardless of SSO choice
 
 ## Setup
 
@@ -94,37 +96,40 @@ Then log in at `https://<your-domain>/` with the admin email you seeded.
 Full commands and tradeoffs for each path in
 [docs/DISTRICT_SETUP.pdf](docs/DISTRICT_SETUP.pdf).
 
-## Local auth (optional, feature-flagged)
+## Auth
 
-Secondary login path for break-glass admin, Microsoft 365 shops, or
-service accounts that need to call Nexus's API without Google SSO.
-Off by default.
+**Local auth is the default** (`LOCAL_AUTH_ENABLED=true`). Users sign in
+with email + password; admins managed through the Settings UI.
+
+On first boot a **default admin** is created automatically:
+- email: `admin@local`
+- password: `changeme123!`
+- `must_change_password=true` — the first login forces a password reset
+  before anything else works
+
+Subsequent accounts live in **Settings → Access → Local Accounts** (list,
+add, reset password, enable/disable, grant/revoke admin, delete) or
+via `POST /api/local-users`.
+
+Technical defaults:
+- argon2id password hashing (OWASP-recommended)
+- Per-email failure lockout: 5 attempts within 15 min → 15 min lockout
+- All login attempts audit-logged (success + failure)
+
+## Google SSO (optional)
+
+For districts that use Google Workspace and want staff to sign in
+with their district Google account instead of (or in addition to) a
+local account. Off by default.
 
 Enable in `.env`:
 ```
-LOCAL_AUTH_ENABLED=true
+GOOGLE_AUTH_ENABLED=true
 ```
 
-Then:
-- Either re-run `scripts/first_run.sh` to prompt for an initial local
-  admin (recommended), OR
-- Let the API create a **default admin** on first boot:
-    - email: `admin@local`
-    - password: `changeme123!`
-    - `must_change_password=true` — first login forces a password reset
-      before anything else works
-
-Subsequent accounts are managed in **Settings → Access → Local
-Accounts** (list, add, reset password, enable/disable, grant/revoke
-admin, delete) or via `/api/local-users`.
-
-Technical details:
-- Passwords hashed with argon2id (OWASP-recommended defaults)
-- Per-email failure lockout: 5 attempts within 15 min → 15 min lockout
-- Session cookie identical to the Google flow — downstream middleware
-  can't tell the two apart
-- All login attempts audit-logged (success + failure)
-- When flag is off: zero routes registered, zero attack surface
+Then set up a Google OAuth 2.0 Client — walkthrough below. When both
+auth paths are enabled, the login page shows the local form at the
+top + "Sign in with Google" button below.
 
 ## Google OAuth 2.0 Client — for user Sign-In
 
