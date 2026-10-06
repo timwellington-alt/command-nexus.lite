@@ -183,7 +183,7 @@ Both live in the same Google Cloud project you created above.
 - **APIs & Services → Credentials → Create Credentials → OAuth client ID**.
 - **Application type**: Web application.
 - **Name**: Nexus Web Login (anything, it's just a label).
-- **Authorized redirect URIs** — add exactly one:
+- **Authorized redirect URIs** — add one or more:
 
   ```
   https://nexus.yourdistrict.org/auth/callback
@@ -191,6 +191,24 @@ Both live in the same Google Cloud project you created above.
 
   (Match your real DOMAIN from `.env`. The path `/auth/callback`
   is fixed — Nexus's OAuth router expects it there.)
+
+  **For internal / LAN-only deployments** (TLS Paths D + E): register
+  the LAN hostname instead:
+
+  ```
+  https://nexus.district.local/auth/callback
+  ```
+
+  Google doesn't validate reachability during registration — a
+  non-public hostname works fine as long as the URI matches EXACTLY
+  what Nexus sends in the OAuth redirect. The browser doing the login
+  needs to reach that hostname (so staff must be on the LAN or VPN).
+
+  **For mixed internal/external access** (same deployment reachable
+  via both a LAN name and a public name): add BOTH redirect URIs to
+  the same OAuth Client — Google allows multiple. Nexus always sends
+  the redirect URI matching its current DOMAIN env var.
+
 - Click Create.
 - Copy the **Client ID** (ends in `.apps.googleusercontent.com`) and
   **Client secret** (shown once; you can regenerate if you miss it).
