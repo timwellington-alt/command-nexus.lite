@@ -15,6 +15,31 @@ if [ ! -f .env ]; then
     exit 1
 fi
 
+# Source .env + apply the SAME defaults config.py uses, so an older
+# .env missing the auth flags doesn't accidentally land in a different
+# branch than the running API will.
+set -a; # shellcheck disable=SC1091
+source .env
+set +a
+LOCAL_AUTH_ENABLED="${LOCAL_AUTH_ENABLED:-true}"
+GOOGLE_AUTH_ENABLED="${GOOGLE_AUTH_ENABLED:-false}"
+
+is_true() {
+    case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
+        1|true|yes|on) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+echo "Auth mode:"
+if is_true "$LOCAL_AUTH_ENABLED"; then echo "  local: ON"; else echo "  local: off"; fi
+if is_true "$GOOGLE_AUTH_ENABLED"; then echo "  google: ON"; else echo "  google: off"; fi
+if ! is_true "$LOCAL_AUTH_ENABLED" && ! is_true "$GOOGLE_AUTH_ENABLED"; then
+    echo "ERROR: both auth modes are disabled — nobody could log in. Enable at least one in .env." >&2
+    exit 1
+fi
+echo
+
 mkdir -p secrets
 
 # Generate any missing secret files. Existing files are left alone so
@@ -36,13 +61,11 @@ gen_secret secrets/postgres_password        "python3 -c 'import secrets; print(s
 gen_secret secrets/redis_password           "python3 -c 'import secrets; print(secrets.token_urlsafe(24))'"
 gen_secret secrets/settings_encryption_key  "python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'"
 
-# Google OAuth client (for the Sign-in-with-Google button). Prompted
-# only when GOOGLE_AUTH_ENABLED=true in .env. Otherwise skipped —
-# local auth is the default; Google SSO is opt-in.
-if grep -qE '^GOOGLE_AUTH_ENABLED\s*=\s*(1|true|yes|on)' .env 2>/dev/null; then
+# Google OAuth client (for Sign-in-with-Google) — only when flag is on.
+if is_true "$GOOGLE_AUTH_ENABLED"; then
     if [ ! -s secrets/google_client_id ]; then
         echo
-        echo "-- Google OAuth client (GOOGLE_AUTH_ENABLED=true detected) --"
+        echo "-- Google OAuth client (GOOGLE_AUTH_ENABLED=true) --"
         echo "  Create one at https://console.cloud.google.com/apis/credentials"
         echo "  → Create Credentials → OAuth client ID → Web application"
         echo "  → Authorized redirect URI: https://<your-domain>/auth/callback"
@@ -59,52 +82,46 @@ if grep -qE '^GOOGLE_AUTH_ENABLED\s*=\s*(1|true|yes|on)' .env 2>/dev/null; then
         printf '%s' "$gcs" > secrets/google_client_secret
         chmod 600 secrets/google_client_secret
     fi
-    # Service account JSON — needed for backend Directory/Gmail/Sheets
-    # too. Must be provided manually; we only verify.
     if [ ! -s secrets/google_service_account.json ]; then
         echo
         echo "  WARN: secrets/google_service_account.json is missing." >&2
         echo "  If you plan to use Google backend features (Directory API,"      >&2
-        echo "  Gmail-based attendance ingest, Sheets custom-sections sync),"    >&2
-        echo "  copy your service-account key JSON into that path before"        >&2
-        echo "  starting the stack."                                             >&2
+        echo "  Gmail attendance ingest, Sheets custom-sections sync), copy"    >&2
+        echo "  your service-account key JSON into that path before start."     >&2
     fi
 fi
 
+# Admin bootstrap. If Google SSO is on, seed a Google admin email. If
+# local auth is on, offer to seed a local admin (defaults are OK too —
+# the API creates admin@local on first boot if nothing's seeded).
 echo
 echo "-- admin bootstrap --"
-if grep -qE '^GOOGLE_AUTH_ENABLED\s*=\s*(1|true|yes|on)' .env 2>/dev/null; then
-    read -p "Initial admin email (must exist in your Google Workspace): " admin_email
-    if [ -z "$admin_email" ]; then
-        echo "ERROR: admin email is required when Google SSO is on." >&2
-        exit 1
+
+admin_email=""
+if is_true "$GOOGLE_AUTH_ENABLED"; then
+    read -p "Google admin email (must exist in your Workspace): " admin_email
+    if [ -n "$admin_email" ]; then
+        echo "$admin_email" > secrets/bootstrap_admin_email
+        chmod 600 secrets/bootstrap_admin_email
     fi
-    echo "$admin_email" > secrets/bootstrap_admin_email
-    chmod 600 secrets/bootstrap_admin_email
-else
-    echo "  Google SSO disabled — skipping Google admin seed."
-    echo "  A default local admin (admin@local / changeme123!) will be"
-    echo "  created on first API boot. First login forces a password change."
 fi
 
-# ─── Local-auth seed (optional) ─────────────────────────────────
-# If LOCAL_AUTH_ENABLED=true in .env, prompt for an initial local
-# admin + password so a non-Google login path works immediately.
-if grep -qE '^LOCAL_AUTH_ENABLED\s*=\s*(1|true|yes|on)' .env 2>/dev/null; then
+if is_true "$LOCAL_AUTH_ENABLED"; then
     echo
-    echo "-- local-auth seed --"
-    echo "  LOCAL_AUTH_ENABLED detected. Seeding an initial local admin so"
-    echo "  you can log in without Google SSO (useful for break-glass and"
-    echo "  Microsoft 365 shops)."
+    echo "  Local admin seed (optional)."
+    echo "  Press ENTER on both prompts to skip — the API will then auto-create"
+    echo "  admin@local / changeme123! on first boot (forced password change)."
     read -p "  Local admin email: " local_email
-    read -sp "  Local admin password (≥ 12 chars): " local_pw; echo
-    if [ -z "$local_email" ] || [ "${#local_pw}" -lt 12 ]; then
-        echo "  WARN: skipping local-admin seed (email missing or password too short)" >&2
-    else
+    read -sp "  Local admin password (≥ 12 chars, or empty to skip): " local_pw; echo
+    if [ -n "$local_email" ] && [ "${#local_pw}" -ge 12 ]; then
         printf '%s\n%s' "$local_email" "$local_pw" > secrets/bootstrap_local_admin
         chmod 600 secrets/bootstrap_local_admin
         echo "  seed written to secrets/bootstrap_local_admin"
-        echo "  (the api container applies it on first startup, then removes the file)"
+        echo "  (the api container applies it on first boot, then removes the file)"
+    elif [ -n "$local_email" ] || [ -n "$local_pw" ]; then
+        echo "  (incomplete input — skipping local seed, default admin will be used)" >&2
+    else
+        echo "  (no local admin seeded — default admin@local will be used)"
     fi
 fi
 
@@ -113,13 +130,14 @@ echo "== First-run complete =="
 echo
 echo "Next steps:"
 echo "  1. docker compose up -d"
-if grep -qE '^GOOGLE_AUTH_ENABLED\s*=\s*(1|true|yes|on)' .env 2>/dev/null; then
-    echo "  2. Open https://\$DOMAIN/ and sign in with Google as $admin_email"
-    echo "     OR use the local admin (see below)."
-else
-    echo "  2. Open https://\$DOMAIN/ and sign in with the default local admin:"
-    echo "       email:    admin@local"
-    echo "       password: changeme123!"
-    echo "     You'll be forced to pick a new password immediately."
+echo "  2. Open https://\$DOMAIN/ and sign in:"
+if is_true "$LOCAL_AUTH_ENABLED" && [ ! -s secrets/bootstrap_local_admin ]; then
+    echo "     • Default local admin: admin@local / changeme123!"
+    echo "       (You'll be forced to pick a new password immediately.)"
+elif is_true "$LOCAL_AUTH_ENABLED"; then
+    echo "     • Local admin: (the email + password you just entered)"
+fi
+if is_true "$GOOGLE_AUTH_ENABLED" && [ -n "$admin_email" ]; then
+    echo "     • Google SSO as: $admin_email"
 fi
 echo
