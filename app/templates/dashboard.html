@@ -91,6 +91,24 @@
       </button>
     </div>
   </div>
+  <!-- First-run setup checklist. Fetched on load; hidden entirely
+       when every item is complete. -->
+  <div id="setup-checklist" style="display:none;margin-bottom:16px;background:var(--surface);border:1px solid var(--accent);border-left-width:4px;border-radius:6px;padding:14px 18px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--accent)">Finish setting up Nexus</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">
+          <span id="sc-progress"></span> — this card disappears when all items are done.
+        </div>
+      </div>
+      <button id="sc-dismiss" title="Hide for this session (reappears on refresh)"
+        style="background:none;border:1px solid var(--border);color:var(--muted);padding:3px 10px;border-radius:4px;font-size:11px;cursor:pointer">
+        Dismiss
+      </button>
+    </div>
+    <ul id="sc-items" style="list-style:none;margin:0;padding:0"></ul>
+  </div>
+
   <div class="dash-grid" id="dashboard">
     <div class="dash-panel dash-full"><div class="loading">Loading dashboard…</div></div>
   </div>
@@ -835,6 +853,50 @@ window.addEventListener('resize', () => {
 
 loadDashboard();
 setInterval(loadDashboard, 60000);
+
+// ── First-run setup checklist ─────────────────────────────────────
+async function loadSetupChecklist() {
+  const card = document.getElementById('setup-checklist');
+  if (!card) return;
+  if (sessionStorage.getItem('sc-dismissed') === '1') return;
+  try {
+    const r = await fetch('/api/dashboard/setup-checklist',
+      {headers: {'X-Requested-With': 'CommandNexus'}});
+    if (!r.ok) return;
+    const data = await r.json();
+    const items = data.items || [];
+    if (!items.length) { card.style.display = 'none'; return; }
+    const prog = document.getElementById('sc-progress');
+    prog.textContent = `${items.length} of ${data.total_checks} items still need attention`;
+    document.getElementById('sc-items').innerHTML = items.map(it => `
+      <li style="padding:8px 0;border-top:1px solid var(--border)">
+        <a href="${it.link}" style="color:var(--text);text-decoration:none;display:flex;align-items:flex-start;gap:10px">
+          <span style="color:var(--yellow);font-size:14px;line-height:1.3">○</span>
+          <span style="flex:1">
+            <span style="font-weight:500;font-size:13px">${escapeHtml(it.label)}</span>
+            <span style="display:block;font-size:11px;color:var(--muted);margin-top:2px">${escapeHtml(it.detail)}</span>
+          </span>
+          <span style="color:var(--muted);font-size:11px">↗</span>
+        </a>
+      </li>
+    `).join('');
+    card.style.display = 'block';
+  } catch (e) { /* silent — checklist is best-effort */ }
+}
+
+function escapeHtml(s) {
+  return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+document.getElementById('sc-dismiss')?.addEventListener('click', () => {
+  sessionStorage.setItem('sc-dismissed', '1');
+  document.getElementById('setup-checklist').style.display = 'none';
+});
+
+loadSetupChecklist();
+// Refresh every 60s alongside the dashboard — items disappear as the
+// operator ticks them off in Settings
+setInterval(loadSetupChecklist, 60000);
 
 // ── Customize modal ───────────────────────────────────────────────
 

@@ -67,6 +67,23 @@ async def dashboard(
 
 # ── Panel data endpoints ──────────────────────────────────────────────────
 
+@router.get("/api/dashboard/setup-checklist")
+async def setup_checklist(
+    user: User = Depends(require_action("dashboard.view")),
+    db: AsyncSession = Depends(get_db),
+):
+    """First-run setup items that aren't done yet. Dashboard renders a
+    card at the top for every item with complete=False."""
+    from app.modules.dashboard.setup_checklist import build_checklist
+    items = await build_checklist(db)
+    incomplete = [i for i in items if not i["complete"]]
+    return {
+        "items": incomplete,
+        "total_checks": len(items),
+        "complete_count": len(items) - len(incomplete),
+    }
+
+
 @router.get("/api/dashboard/worker-health")
 async def worker_health(
     user: User = Depends(require_action("dashboard.view")),
