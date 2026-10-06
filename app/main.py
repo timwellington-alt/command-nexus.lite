@@ -51,6 +51,35 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("Branding preload failed, using defaults: %s", e)
 
+    # Local-auth bootstrap — if secrets/bootstrap_local_admin exists AND
+    # the feature flag is on, create (or update) that admin account on
+    # startup then remove the file so the password doesn't linger on disk.
+    try:
+        if get_settings().local_auth_enabled:
+            import os as _os
+            boot_path = _os.environ.get("SECRETS_DIR", "/run/secrets") + "/bootstrap_local_admin"
+            if _os.path.isfile(boot_path):
+                with open(boot_path) as _f:
+                    _lines = _f.read().strip().splitlines()
+                if len(_lines) == 2:
+                    _email, _pw = _lines[0].strip().lower(), _lines[1]
+                    from app.db.engine import AsyncSessionLocal
+                    from app.auth.local import _hasher
+                    from sqlalchemy import text as _text
+                    async with AsyncSessionLocal() as _db:
+                        await _db.execute(_text("""
+                            INSERT INTO local_users (email, display_name, pw_hash, is_admin, created_by)
+                            VALUES (:e, :e, :p, true, 'system:bootstrap')
+                            ON CONFLICT (email) DO UPDATE SET
+                                pw_hash = EXCLUDED.pw_hash, is_admin = true, active = true
+                        """).bindparams(e=_email, p=_hasher().hash(_pw)))
+                        await _db.commit()
+                    logger.info("Local-auth bootstrap: admin %s seeded", _email)
+                    try: _os.remove(boot_path)
+                    except OSError: pass
+    except Exception as e:
+        logger.warning("Local-auth bootstrap failed (non-fatal): %s", e)
+
     # Worker watchdog — pages when the worker container goes silent.
     # Leader-locked via fcntl so only one uvicorn worker actually runs it.
     from app.observability import worker_watchdog as _wd
@@ -111,7 +140,10 @@ def create_app() -> FastAPI:
         if request.session.get("user_email"):
             return RedirectResponse(url="/dashboard")
         templates = Jinja2Templates(directory="app/templates")
-        return templates.TemplateResponse("login.html", {"request": request})
+        return templates.TemplateResponse("login.html", {
+            "request": request,
+            "local_auth_enabled": settings.local_auth_enabled,
+        })
 
     _register_routers(app)
     return app
@@ -157,6 +189,13 @@ def _register_routers(app: FastAPI):
 
     # alerts UI CRUD stripped in the lite build — dispatch still lives
     # in app.modules.alerts.service (called from worker_watchdog etc.).
+
+    # Local-auth routes — only mounted when the feature flag is on so
+    # districts that use SSO-only have zero attack surface here.
+    if get_settings().local_auth_enabled:
+        from app.auth.local import router as local_auth_router, admin_router as local_users_admin_router
+        app.include_router(local_auth_router)
+        app.include_router(local_users_admin_router)
 
     # /me self-service page stripped in the lite build (was tied to
     # VoiceRecipient bindings that we removed). Add back as a proper

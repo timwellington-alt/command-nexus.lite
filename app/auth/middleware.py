@@ -32,7 +32,13 @@ from app.auth.group_sync import check_2fa_enrolled
 logger = logging.getLogger(__name__)
 
 # Routes that require NO authentication
-PUBLIC_PATHS = {"/", "/health", "/auth/login", "/auth/callback", "/auth/logout", "/api/branding", "/api/buildings",
+PUBLIC_PATHS = {"/", "/health", "/auth/login", "/auth/callback", "/auth/logout",
+                # Local-auth routes — only reachable when LOCAL_AUTH_ENABLED,
+                # but the auth middleware doesn't check feature flags; it's
+                # safe to list them unconditionally because the router
+                # itself isn't mounted when the flag is off.
+                "/auth/local/login", "/auth/local/logout",
+                "/api/branding", "/api/buildings",
                 # Cast receiver HTML — Chromecast fetches this with no
                 # cookies. It's a static bootstrapper page with no data.
                 "/cast-receiver"}
@@ -93,7 +99,10 @@ class AuthMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         # ── CSRF protection on mutating requests ──
-        if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+        # Local-auth login POST exempt — the user has no session yet so
+        # there's no custom-header to assert. Origin/Referer check still
+        # happens inside the handler; cross-origin login POSTs fail there.
+        if request.method in ("POST", "PUT", "PATCH", "DELETE") and path != "/auth/local/login":
             if not self._check_csrf(request, settings):
                 if path.startswith("/api/"):
                     return JSONResponse({"detail": "CSRF validation failed"}, status_code=403)

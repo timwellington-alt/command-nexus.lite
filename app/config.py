@@ -58,6 +58,11 @@ class Settings:
         self.google_client_secret = _read_secret("google_client_secret", "GOOGLE_CLIENT_SECRET")
         self.google_domain = os.environ.get("GOOGLE_DOMAIN", "")
 
+        # Local-auth mode (secondary; off by default). When enabled the
+        # login page gets a "Local account" tab and the /auth/local
+        # routes are registered.
+        self.local_auth_enabled = os.environ.get("LOCAL_AUTH_ENABLED", "false").lower() in ("1", "true", "yes", "on")
+
         # Settings encryption key (for integration secrets at rest)
         self.settings_encryption_key = _read_secret(
             "settings_encryption_key",

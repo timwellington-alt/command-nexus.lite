@@ -78,6 +78,27 @@ fi
 echo "$admin_email" > secrets/bootstrap_admin_email
 chmod 600 secrets/bootstrap_admin_email
 
+# ─── Local-auth seed (optional) ─────────────────────────────────
+# If LOCAL_AUTH_ENABLED=true in .env, prompt for an initial local
+# admin + password so a non-Google login path works immediately.
+if grep -qE '^LOCAL_AUTH_ENABLED\s*=\s*(1|true|yes|on)' .env 2>/dev/null; then
+    echo
+    echo "-- local-auth seed --"
+    echo "  LOCAL_AUTH_ENABLED detected. Seeding an initial local admin so"
+    echo "  you can log in without Google SSO (useful for break-glass and"
+    echo "  Microsoft 365 shops)."
+    read -p "  Local admin email: " local_email
+    read -sp "  Local admin password (≥ 12 chars): " local_pw; echo
+    if [ -z "$local_email" ] || [ "${#local_pw}" -lt 12 ]; then
+        echo "  WARN: skipping local-admin seed (email missing or password too short)" >&2
+    else
+        printf '%s\n%s' "$local_email" "$local_pw" > secrets/bootstrap_local_admin
+        chmod 600 secrets/bootstrap_local_admin
+        echo "  seed written to secrets/bootstrap_local_admin"
+        echo "  (the api container applies it on first startup, then removes the file)"
+    fi
+fi
+
 echo
 echo "== First-run complete =="
 echo

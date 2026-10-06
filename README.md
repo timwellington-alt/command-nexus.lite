@@ -94,6 +94,30 @@ Then log in at `https://<your-domain>/` with the admin email you seeded.
 Full commands and tradeoffs for each path in
 [docs/DISTRICT_SETUP.pdf](docs/DISTRICT_SETUP.pdf).
 
+## Local auth (optional, feature-flagged)
+
+Secondary login path for break-glass admin, Microsoft 365 shops, or
+service accounts that need to call Nexus's API without Google SSO.
+Off by default.
+
+Enable in `.env`:
+```
+LOCAL_AUTH_ENABLED=true
+```
+
+Then re-run `scripts/first_run.sh` — it'll prompt for an initial
+local admin email + password (min 12 chars) and seed them. Subsequent
+accounts are created from the Settings → Local accounts admin UI (or
+POST to `/api/local-users`).
+
+Technical details:
+- Passwords hashed with argon2id (OWASP-recommended defaults)
+- Per-email failure lockout: 5 attempts within 15 min → 15 min lockout
+- Session cookie identical to the Google flow — downstream middleware
+  can't tell the two apart
+- All login attempts audit-logged (success + failure)
+- When flag is off: zero routes registered, zero attack surface
+
 ## Google OAuth 2.0 Client — for user Sign-In
 
 Separate from the service account (which handles backend API work).

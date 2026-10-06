@@ -14,8 +14,17 @@
         .login-card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 40px; text-align: center; max-width: 380px; width: 100%; }
         .login-card h1 { font-size: 22px; margin-bottom: 8px; }
         .login-card p { font-size: 13px; color: #8b949e; margin-bottom: 24px; }
-        .btn-google { display: inline-flex; align-items: center; gap: 10px; padding: 10px 24px; background: #238636; color: #fff; font-size: 14px; font-weight: 600; border: none; border-radius: 6px; cursor: pointer; text-decoration: none; transition: background 0.15s; }
+        .btn-google { display: inline-flex; align-items: center; gap: 10px; padding: 10px 24px; background: #238636; color: #fff; font-size: 14px; font-weight: 600; border: none; border-radius: 6px; cursor: pointer; text-decoration: none; transition: background 0.15s; width: 100%; justify-content: center; }
         .btn-google:hover { background: #2ea043; }
+        .btn-local  { display: block; width: 100%; padding: 10px 24px; background: #30363d; color: #e6edf3; font-size: 14px; font-weight: 600; border: 1px solid #484f58; border-radius: 6px; cursor: pointer; margin-top: 8px; }
+        .btn-local:hover { background: #3d444d; }
+        .divider { color: #8b949e; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; margin: 14px 0 12px; }
+        .local-form { display: none; margin-top: 12px; text-align: left; }
+        .local-form input { width: 100%; padding: 8px 10px; background: #0d1117; border: 1px solid #30363d; color: #e6edf3; border-radius: 4px; font-size: 13px; margin-bottom: 8px; }
+        .local-form input:focus { outline: none; border-color: #58a6ff; }
+        .local-form button { width: 100%; padding: 9px; background: #1f6feb; color: #fff; font-size: 13px; font-weight: 600; border: none; border-radius: 4px; cursor: pointer; }
+        .local-form button:hover { background: #388bfd; }
+        .toggle-local { background: none; border: none; color: #58a6ff; font-size: 12px; cursor: pointer; margin-top: 10px; }
         .error { color: #f85149; font-size: 13px; margin-bottom: 16px; }
     </style>
 </head>
@@ -24,18 +33,41 @@
         <img src="/static/img/logo-mark.svg" alt="" style="width:48px;height:48px;margin-bottom:12px">
         <h1 id="login-title">Nexus</h1>
         <p id="login-subtitle">IT Operations</p>
-        {% if request.query_params.get('error') %}
+        {% if request.query_params.get('error') or request.query_params.get('err') %}
         <div class="error">
-            {% set err = request.query_params.get('error') %}
+            {% set err = request.query_params.get('error') or request.query_params.get('err') %}
             {% if err == 'no_access' %}You don't have access. Contact IT.
             {% elif err == 'wrong_domain' %}Use your district Google account.
             {% elif err == '2fa_required' %}2-Step Verification is required. <a href="https://myaccount.google.com/signinoptions/two-step-verification" target="_blank" style="color:#f85149">Enable it here</a>, then try again.
             {% elif err == 'state_mismatch' %}Session expired. Try again.
+            {% elif err == 'local_bad' %}Wrong email or password.
+            {% elif err == 'local_locked' %}Too many failures — try again in 15 minutes.
+            {% elif err == 'local_missing' %}Email and password required.
             {% else %}Authentication error: {{ err }}{% endif %}
         </div>
         {% endif %}
         <a href="/auth/login" class="btn-google">Sign in with Google</a>
+        {% if local_auth_enabled %}
+        <button class="toggle-local" id="toggle-local">Use a local account instead</button>
+        <form class="local-form" id="local-form" method="POST" action="/auth/local/login">
+            <div class="divider">Local account</div>
+            <input type="email" name="email" placeholder="Email" autocomplete="username" required>
+            <input type="password" name="password" placeholder="Password" autocomplete="current-password" required>
+            <button type="submit">Sign in</button>
+        </form>
+        {% endif %}
     </div>
-<script nonce="{{ request.state.csp_nonce }}">document.title=document.title.replace("Command Nexus","{{ request.state.branding.page_title_prefix }}");</script>
+<script nonce="{{ request.state.csp_nonce }}">
+document.title = document.title.replace("Command Nexus", "{{ request.state.branding.page_title_prefix }}");
+const toggle = document.getElementById('toggle-local');
+if (toggle) {
+    toggle.addEventListener('click', () => {
+        const form = document.getElementById('local-form');
+        const visible = form.style.display === 'block';
+        form.style.display = visible ? 'none' : 'block';
+        toggle.textContent = visible ? 'Use a local account instead' : 'Hide local account';
+    });
+}
+</script>
 </body>
 </html>

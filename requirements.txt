@@ -66,3 +66,4 @@ pymysql>=1.1
 # model file). 4.9 still ships Haar cascade XMLs bundled in
 # cv2/data/haarcascades/, which is what photo_processor uses.
 opencv-python-headless>=4.9,<5
+argon2-cffi>=23.1
