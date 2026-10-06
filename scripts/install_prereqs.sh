@@ -85,6 +85,46 @@ log "Verifying installation…"
 docker --version
 docker compose version
 
+# Verify the invoking user can actually hit the docker socket. If they
+# were just added to the group, they almost certainly can't — their
+# current session's credentials don't include the new group. Call that
+# out loudly with the exact command needed instead of letting them
+# discover it at `docker compose up` time.
+NEEDS_RELOGIN=0
+if [ "$INVOKING_USER" != "root" ]; then
+    if ! sudo -n -u "$INVOKING_USER" docker info >/dev/null 2>&1; then
+        NEEDS_RELOGIN=1
+    fi
+fi
+
+if [ "$NEEDS_RELOGIN" = "1" ]; then
+    cat <<EOF
+
+${RED}================================================================
+IMPORTANT — your current shell CANNOT talk to Docker yet.
+================================================================${NC}
+
+You were added to the 'docker' group, but Linux doesn't refresh group
+membership on an already-running shell. If you run 'docker compose up'
+right now you'll get:
+
+    permission denied while trying to connect to the Docker daemon
+    socket at unix:///var/run/docker.sock
+
+Fix with EITHER:
+
+  ${YELLOW}• Log out and log back in${NC} (cleanest — every future shell gets it)
+
+  ${YELLOW}• Or activate the group in this terminal only:${NC}
+        newgrp docker
+
+  ${YELLOW}• Or prefix docker commands with sudo${NC} (works but noisy)
+
+Verify with:  ${GREEN}docker ps${NC}  (should list containers, not error)
+
+EOF
+fi
+
 cat <<EOF
 
 ${GREEN}================================================================
@@ -93,8 +133,10 @@ Prerequisites installed.
 
 Next steps (as ${INVOKING_USER:-your deploy user}):
 
-  1. If you were just added to the docker group, log out + back in
-     (or run 'newgrp docker' in your current shell).
+  1. Confirm docker works WITHOUT sudo for your user:
+       docker ps
+     If you get a permission error, run 'newgrp docker' or re-login
+     first — see the IMPORTANT box above.
 
   2. Clone this repo if you haven't already:
        git clone https://github.com/timwellington-alt/command-nexus.lite.git command-nexus-lite
