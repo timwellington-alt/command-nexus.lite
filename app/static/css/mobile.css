@@ -1,0 +1,2109 @@
+/* Command Nexus — Shared layout + Mobile responsive overrides */
+
+/* ── Mobile bottom nav ─────────────────────────────────────────
+   Rendered by app/templates/_mobile_nav.html on every page.
+   Hidden on desktop; fixed strip on phones with thumb-reachable
+   tap targets and SVG icons. */
+.mobile-bottom-nav { display: none; }
+
+@media (max-width: 768px) {
+  .mobile-bottom-nav {
+    display: flex;
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    z-index: 100;
+    background: var(--surface, #161b22);
+    border-top: 1px solid var(--border, #30363d);
+    /* Give the icons clearance above the iOS home-swipe gesture zone.
+       The home indicator area on notched iPhones is bigger than the
+       CSS safe-area-inset alone suggests — the swipe-to-home gesture
+       reaches up ~44px from the physical bottom. Pad more aggressively
+       so tap targets sit well above it. */
+    padding: 6px 4px calc(env(safe-area-inset-bottom, 0px) + 24px);
+    /* Fit items to width — no horizontal scroll. Horizontal scroll
+       here was catching edge swipes while trying to navigate the
+       app. touch-action:manipulation limits gestures to tap+double-tap,
+       no pan/zoom. */
+    overflow: hidden;
+    touch-action: manipulation;
+    overscroll-behavior: contain;
+  }
+  .mb-item {
+    flex: 1 1 0;
+    /* min-width honors WCAG/MHIG 44px minimum tap target width. Items
+       still shrink to fit the viewport but won't drift below a
+       reliably-tappable size. */
+    min-width: 44px;
+    min-height: 48px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 6px 2px;
+    color: var(--text-muted, #8b949e);
+    text-decoration: none;
+    font-size: 9px;
+    font-weight: 500;
+    border-radius: 6px;
+    touch-action: manipulation;
+  }
+  .mb-item svg { width: 20px; height: 20px; flex-shrink: 0; }
+}
+
+/* On very narrow phones (≤400px), drop lower-priority bottom-nav items
+   so the remaining ones keep a comfortable touch target. Audit and Ops
+   are admin-only diagnostic surfaces — never the critical mobile flow. */
+@media (max-width: 400px) {
+  .mobile-bottom-nav a[href="/audit"],
+  .mobile-bottom-nav a[href="/docs"] { display: none; }
+}
+
+@media (max-width: 768px) {
+  .mb-item:active { background: rgba(255,255,255,0.04); }
+  .mb-item.active { color: var(--accent, #58a6ff); }
+  .mb-item.active svg { stroke: var(--accent, #58a6ff); }
+
+  /* Pad the bottom of every page so content isn't hidden behind the nav.
+     Matches the taller nav (icon row + safe-area + 24px buffer above
+     the iOS home-swipe zone). */
+  body { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 84px); }
+  .settings-layout { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 84px); }
+
+  /* Lock horizontal scroll. Use overflow-x:clip (not hidden) — hidden
+     promotes html/body to a scroll container which breaks
+     position:sticky on the header. clip prevents scroll without that
+     side effect. Supported in all current browsers. */
+  html, body { overflow-x: clip; max-width: 100vw; }
+  /* Defensive: some pages have a sticky header + long user email that
+     can push the header wider than the viewport. clip it here so it
+     can never leak into body-level lateral scroll gestures. */
+  .header, .content { max-width: 100vw; overflow-x: clip; }
+  /* Long user email can force header-right flex to overflow — let it
+     ellipsize instead. */
+  .user-area a.logout:first-child { max-width: 52vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* Long monospace values (serial numbers, asset tags) shouldn't force
+     table columns wider than the viewport. */
+  table td.mono, table th.mono { word-break: break-all; }
+}
+
+
+/* ── Shared modal (dialog) styles ────────────────────────────
+   Canonical styles for the .modal-bg / .modal / .modal-head / .modal-body /
+   .modal-foot / .close-x pattern. Individual pages may override .modal
+   max-width only. z-index sits above the mobile bottom nav (100) so the
+   modal covers it; extra bottom padding on mobile keeps the modal-foot
+   buttons clear of the nav strip. */
+.modal-bg {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: none;
+  align-items: center; justify-content: center;
+  z-index: 150;
+  padding: 20px;
+}
+.modal-bg.open { display: flex; }
+.modal {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px;
+  width: 100%; max-width: 520px;
+  max-height: 90vh; overflow-y: auto; overflow-x: hidden;
+}
+.modal-head {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 14px 18px; border-bottom: 1px solid var(--border);
+}
+.modal-head h3 { font-size: 15px; font-weight: 600; }
+.modal-body { padding: 16px 18px; overflow-x: hidden; }
+.modal-foot {
+  padding: 12px 18px; border-top: 1px solid var(--border);
+  display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap;
+}
+.close-x {
+  background: transparent; border: none;
+  color: var(--muted); font-size: 20px; cursor: pointer;
+}
+@media (max-width: 768px) {
+  /* Keep the modal foot (Cancel/Save etc.) above the bottom nav strip. */
+  .modal-bg { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 96px); }
+}
+
+
+/* ── Standardized page layout ───────────────────────────────── */
+.content, .main, .content-body {
+  max-width: 1400px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 24px;
+  padding-right: 24px;
+}
+
+/* ── Desktop sub-nav ────────────────────────────────────────────
+   Canonical style for module-level sub-navs. Used by both
+   `<nav class="subnav">` (inline pattern across inventory pages) and
+   `<div class="infra-nav">` (shared-partial pattern for Infrastructure
+   and Facilities). The `.infra-nav` / `.infra-tab` aliases below are
+   kept for back-compat with templates that still reference them, but
+   they resolve to the same visual style.
+
+   When creating a new module's sub-nav, prefer the shared-partial
+   pattern (see `_infra_subnav.html` / `_facilities_subnav.html`) with
+   `<nav class="subnav">` markup. Don't redefine .subnav in per-page
+   <style> blocks unless overriding for a specific need. */
+.subnav, .infra-nav {
+  display: flex; gap: 2px;
+  border-bottom: 1px solid var(--border, #30363d);
+  margin: 0 0 16px;
+}
+.subnav a, .infra-tab {
+  padding: 8px 16px; font-size: 13px;
+  color: var(--muted, #8b949e); text-decoration: none;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.subnav a:hover, .infra-tab:hover {
+  color: var(--text, #e6edf3); text-decoration: none;
+}
+.subnav a.active, .infra-tab.active {
+  color: var(--accent, #58a6ff);
+  border-bottom-color: var(--accent, #58a6ff);
+}
+
+/* ── Infrastructure module tabs (mobile) ──────────────────────── */
+.m-infra-tabs {
+  display: none; /* hidden on desktop */
+}
+@media (max-width: 768px) {
+  .m-infra-tabs {
+    display: flex;
+    gap: 0;
+    background: var(--surface, #161b22);
+    border-bottom: 1px solid var(--border, #30363d);
+    padding: 0 8px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    flex-shrink: 0;
+  }
+  .m-infra-tab {
+    flex: 1;
+    text-align: center;
+    padding: 10px 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted, #8b949e);
+    text-decoration: none;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+  }
+  .m-infra-tab.active {
+    color: var(--accent, #58a6ff);
+    border-bottom-color: var(--accent, #58a6ff);
+  }
+  .m-infra-tab:hover { color: var(--text, #e6edf3); text-decoration: none; }
+  /* Hide desktop infra-nav on mobile */
+  .infra-nav { display: none !important; }
+}
+
+/* ── Hamburger menu ─────────────────────────────────────────── */
+.mobile-toggle {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text-muted, #8b949e);
+  font-size: 22px;
+  cursor: pointer;
+  padding: 4px 8px;
+  line-height: 1;
+}
+
+@media (max-width: 768px) {
+  /* Header: single compact row, frozen at top.
+     Bottom nav handles navigation now, so the hamburger is gone. */
+  .header {
+    flex-wrap: nowrap;
+    padding: 8px 14px;
+    gap: 8px;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+  .header-left {
+    width: auto;
+    flex: 1 1 auto;
+    min-width: 0;
+    justify-content: flex-start;
+  }
+  .nav-links, .nav-links-top {
+    display: none !important;
+  }
+  .mobile-toggle {
+    display: none !important;
+  }
+  .user-area {
+    width: auto;
+    justify-content: flex-end;
+    font-size: 11px;
+    flex-shrink: 0;
+  }
+  .logo img { width: 18px; height: 18px; }
+  .logo { font-size: 12px; }
+
+  /* Content: tighter padding on mobile */
+  .content, .main, .content-body {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+    margin-top: 12px;
+  }
+  .page-title { font-size: 15px; margin-bottom: 12px; }
+
+  /* Summary cards: 2-col on phone */
+  .summary-cards, .stat-row {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .card, .stat-card {
+    padding: 10px 12px;
+  }
+  .card-value, .stat-num {
+    font-size: 22px;
+  }
+
+  /* Dashboard grid: single column */
+  .dash-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Tables: horizontal scroll */
+  .panel, .matrix-wrap, table {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .port-table td, .port-table th {
+    white-space: nowrap;
+    font-size: 11px;
+    padding: 4px 6px;
+  }
+
+  /* Tab bars: scrollable */
+  .tab-bar, .main-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    flex-wrap: nowrap;
+  }
+  .tab-btn, .tab {
+    white-space: nowrap;
+    flex-shrink: 0;
+    padding: 8px 12px;
+    font-size: 11px;
+  }
+
+  /* Filter sidebar: collapsible */
+  .filter-sidebar {
+    width: 100% !important;
+    margin-bottom: 12px;
+  }
+  .filter-sidebar.collapsed > .filter-group,
+  .filter-sidebar.collapsed > button {
+    display: none;
+  }
+  .filter-sidebar.collapsed > .filter-toggle-row {
+    display: flex;
+  }
+
+  /* Chromebook: stack filter + content */
+  .filter-sidebar + div {
+    width: 100% !important;
+  }
+
+  /* Overlay/modals: full width on mobile */
+  .switch-detail, .cb-card {
+    max-width: 100% !important;
+    margin: 8px;
+    padding: 16px;
+  }
+  .switch-overlay, .cb-overlay {
+    padding: 8px;
+  }
+
+  /* Building panels */
+  .building-panel {
+    padding: 10px;
+  }
+  .closets-grid {
+    gap: 8px;
+  }
+  .switch-grid {
+    gap: 4px;
+  }
+
+  /* Detail panels (VLAN map, etc.) */
+  .detail-body {
+    grid-template-columns: 1fr !important;
+  }
+  .detail-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  .detail-subnet {
+    margin-left: 0;
+  }
+
+  /* VLAN map: stack sidebar */
+  .layout {
+    grid-template-columns: 1fr !important;
+    height: auto !important;
+  }
+  .sidebar {
+    border-right: none !important;
+    border-bottom: 1px solid var(--border, #30363d);
+    max-height: 200px;
+    overflow-y: auto;
+  }
+
+  /* Bulk action bar: wrap */
+  .bulk-bar {
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px 12px;
+  }
+
+  /* Phones: building panels stack */
+  .phone-grid {
+    grid-template-columns: repeat(auto-fill, minmax(30px, 1fr));
+  }
+
+  /* Traversal grid */
+  .trav-grid, .traverse-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  /* Port panel grid */
+  .port-panel-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Hide low-priority columns on mobile */
+  .hide-mobile {
+    display: none !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .summary-cards, .stat-row {
+    grid-template-columns: 1fr;
+  }
+  .trav-grid, .traverse-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .sidebar {
+    max-height: 150px;
+  }
+}
+
+/* ────────────────────────────────────────────────────────────────── */
+/* Network module — mobile shell                                      */
+/*                                                                    */
+/* Rendered only on the network page (body.page-network) and only     */
+/* at mobile viewport widths. On desktop the whole .net-m-shell       */
+/* stays display:none. On mobile we hide every other direct child of  */
+/* .content (summary cards, tabs, panes, mute button, etc.) using     */
+/* :not(.net-m-shell) so nothing but the mobile shell is visible.     */
+/* The switch-overlay modal is also killed on mobile — the shell has  */
+/* its own ports screen instead.                                      */
+/* ────────────────────────────────────────────────────────────────── */
+.net-m-shell { display: none; }
+.msheet-overlay, .mqr-overlay, .mtoast { display: none; }
+
+/* Mobile-shell box-sizing reset — scoped to the subtree so we
+   don't touch the rest of the app. Every descendant counts its
+   padding + border inside its declared width, so `width: 100%`
+   never overflows the parent. */
+.net-m-shell, .net-m-shell *, .net-m-shell *::before, .net-m-shell *::after {
+  box-sizing: border-box;
+}
+
+@media (max-width: 768px) {
+  /* Lock horizontal scroll and bounce on the network page. The
+     switch detail screen was overflowing on narrow viewports and
+     rubber-banding sideways. overflow-x: hidden kills the scroll
+     and overscroll-behavior-x: none kills the swipe-back gesture
+     that would otherwise pop between pages. */
+  body.page-network {
+    overflow-x: hidden;
+    overscroll-behavior-x: none;
+    max-width: 100vw;
+  }
+
+  body.page-network .content > :not(.net-m-shell) {
+    display: none !important;
+  }
+  body.page-network .switch-overlay {
+    display: none !important;
+  }
+  body.page-network .content {
+    padding: 0 !important;
+    margin-top: 0 !important;
+    max-width: 100vw !important;
+    overflow-x: hidden;
+  }
+  body.page-network .net-m-shell {
+    display: flex;
+    flex-direction: column;
+    height: calc(100dvh - 50px); /* minus mobile header */
+    max-width: 100vw;
+    overflow-x: hidden;
+    background: var(--bg);
+  }
+  body.page-network .net-m-shell .mscroll {
+    /* Belt-and-braces — the scroll container also clamps width
+       so nothing escapes horizontally. */
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  /* Topbar */
+  .net-m-shell .mstopbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px 8px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+  }
+  .net-m-shell .mstb-btn {
+    width: 38px; height: 38px;
+    border-radius: 7px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 17px; color: var(--text-muted);
+    cursor: pointer; flex-shrink: 0;
+    font-family: inherit;
+  }
+  .net-m-shell .mstb-btn:active { background: var(--border); transform: scale(.94); }
+  .net-m-shell .mstb-btn.beacon-on {
+    background: rgba(210,153,34,0.15);
+    border-color: var(--yellow);
+    color: var(--yellow);
+    animation: mstb-beacon-pulse 1s ease-in-out infinite;
+  }
+  @keyframes mstb-beacon-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(210,153,34,0.35); }
+    50%      { box-shadow: 0 0 0 6px transparent; }
+  }
+  .net-m-shell .mstb-center {
+    flex: 1;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+  }
+  .net-m-shell .mstb-title {
+    font-size: 16px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.03em;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    line-height: 1.15;
+    color: var(--text);
+  }
+  .net-m-shell .mstb-sub {
+    font-size: 10px; color: var(--text-muted);
+    letter-spacing: 0.05em; margin-top: 1px;
+    font-family: ui-monospace, SFMono-Regular, monospace;
+  }
+
+  /* Search bar */
+  .net-m-shell .mssearch {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0 12px;
+    margin: 10px 12px 0;
+    flex-shrink: 0;
+  }
+  .net-m-shell .mssearch:focus-within { border-color: var(--accent); }
+  .net-m-shell .mssearch-icon { color: var(--text-muted); font-size: 13px; }
+  .net-m-shell .mssearch input {
+    flex: 1;
+    background: none; border: none; outline: none;
+    color: var(--text);
+    font-size: 13px;
+    padding: 10px 0;
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    min-width: 0;
+  }
+  .net-m-shell .mssearch input::placeholder { color: var(--text-muted); }
+  .net-m-shell .mssearch-clear {
+    color: var(--text-muted); font-size: 14px;
+    padding: 4px; cursor: pointer;
+    display: none;
+  }
+  .net-m-shell .mssearch-clear.on { display: block; }
+
+  /* Screens — only .active one is visible */
+  .net-m-shell .mscreen {
+    display: none; flex-direction: column;
+    flex: 1; overflow: hidden;
+  }
+  .net-m-shell .mscreen.active { display: flex; }
+  .net-m-shell .mscroll {
+    flex: 1; overflow-y: auto;
+    padding: 12px 12px 24px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+    -webkit-overflow-scrolling: touch;
+  }
+  .net-m-shell .mempty {
+    padding: 40px 20px; text-align: center;
+    color: var(--text-muted); font-size: 12px;
+  }
+
+  /* Section header */
+  .net-m-shell .msec {
+    display: flex; align-items: center; gap: 8px;
+    margin: 2px 0 10px;
+  }
+  .net-m-shell .msec-lbl {
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--text-muted); white-space: nowrap;
+  }
+  .net-m-shell .msec-line { flex: 1; height: 1px; background: var(--border); }
+  .net-m-shell .msec-ct {
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 10px; color: var(--text-muted);
+  }
+
+  /* Building cards */
+  .net-m-shell .mbcard {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 13px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    transition: transform .12s, background .12s;
+  }
+  .net-m-shell .mbcard:active { transform: scale(.985); background: var(--surface2); }
+  .net-m-shell .mbcard::before {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+    width: 3px; border-radius: 3px 0 0 3px;
+    background: var(--text-muted);
+  }
+  .net-m-shell .mbcard.ok::before   { background: var(--green); }
+  .net-m-shell .mbcard.warn::before { background: var(--yellow); }
+  .net-m-shell .mbcard.bad::before  { background: var(--red); }
+  .net-m-shell .mbcard-top {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    gap: 10px; margin-bottom: 10px;
+  }
+  .net-m-shell .mbcard-name {
+    font-size: 17px; font-weight: 700;
+    line-height: 1.1;
+    color: var(--text);
+  }
+  .net-m-shell .mbcard-sub {
+    font-size: 11px; color: var(--text-muted);
+    margin-top: 3px;
+    font-family: ui-monospace, SFMono-Regular, monospace;
+  }
+  .net-m-shell .mbadge {
+    padding: 3px 9px; border-radius: 4px;
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 0.05em; text-transform: uppercase;
+    flex-shrink: 0;
+  }
+  .net-m-shell .mbadge.ok   { background: rgba(63,185,80,.15); color: var(--green); }
+  .net-m-shell .mbadge.warn { background: rgba(210,153,34,.15); color: var(--yellow); }
+  .net-m-shell .mbadge.bad  { background: rgba(248,81,73,.15); color: var(--red); }
+  .net-m-shell .mbcard-stats {
+    display: flex;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .net-m-shell .mbcstat {
+    flex: 1; padding: 6px 10px;
+    border-right: 1px solid var(--border);
+  }
+  .net-m-shell .mbcstat:last-child { border-right: none; }
+  .net-m-shell .mbcstat-lbl {
+    font-size: 9px; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .net-m-shell .mbcstat-val {
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 14px; font-weight: 700;
+    margin-top: 1px;
+    color: var(--text);
+  }
+  .net-m-shell .mhealthbar {
+    margin-top: 10px; height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+    display: flex;
+  }
+  .net-m-shell .mhealthbar > div { height: 100%; }
+
+  /* Closet group (collapsible) */
+  .net-m-shell .mcloset-group {
+    margin-bottom: 10px;
+  }
+  .net-m-shell .mcloset-hdr {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 9px 9px 0 0;
+    padding: 10px 12px;
+    cursor: pointer;
+    transition: background .12s;
+  }
+  .net-m-shell .mcloset-hdr:not(.open) {
+    border-radius: 9px;
+  }
+  .net-m-shell .mcloset-hdr:active { background: var(--border); }
+  .net-m-shell .mcloset-icon {
+    font-size: 14px;
+    flex-shrink: 0;
+    opacity: 0.85;
+  }
+  .net-m-shell .mcloset-name {
+    flex: 1;
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .net-m-shell .mcloset-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .net-m-shell .mcloset-meta {
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 10px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+  .net-m-shell .mcloset-chev {
+    color: var(--text-muted);
+    font-size: 14px;
+    transition: transform .2s;
+    flex-shrink: 0;
+  }
+  .net-m-shell .mcloset-hdr.open .mcloset-chev {
+    transform: rotate(90deg);
+  }
+  .net-m-shell .mcloset-body {
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 9px 9px;
+    overflow: hidden;
+    background: var(--bg);
+  }
+  .net-m-shell .mcloset-body.closed {
+    display: none;
+  }
+  .net-m-shell .mcloset-body > .mswrow {
+    border-radius: 0;
+    border: none;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 0;
+  }
+  .net-m-shell .mcloset-body > .mswrow:last-child {
+    border-bottom: none;
+  }
+
+  /* Switch row */
+  .net-m-shell .mswrow {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 11px 13px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: background .12s, transform .12s;
+  }
+  .net-m-shell .mswrow:active { background: var(--surface2); transform: scale(.985); }
+  .net-m-shell .mswrow-dot {
+    width: 9px; height: 9px; border-radius: 2px;
+    flex-shrink: 0;
+    background: var(--text-muted);
+  }
+  .net-m-shell .mswrow-dot.up   { background: var(--green); }
+  .net-m-shell .mswrow-dot.warn { background: var(--yellow); }
+  .net-m-shell .mswrow-dot.down { background: var(--red); }
+  .net-m-shell .mswrow-info { flex: 1; min-width: 0; }
+  .net-m-shell .mswrow-name {
+    font-size: 13px; font-weight: 600;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    color: var(--text);
+  }
+  .net-m-shell .mswrow-ip {
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 10px; color: var(--text-muted);
+    margin-top: 2px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .net-m-shell .mswrow-ports {
+    text-align: right; flex-shrink: 0;
+    font-family: ui-monospace, SFMono-Regular, monospace;
+  }
+  .net-m-shell .mswrow-ports-up {
+    font-size: 13px; font-weight: 700; color: var(--green);
+  }
+  .net-m-shell .mswrow-ports-tot {
+    font-size: 10px; color: var(--text-muted);
+  }
+  .net-m-shell .mswrow-arr { color: var(--text-muted); font-size: 14px; flex-shrink: 0; }
+
+  /* Search result row */
+  .net-m-shell .msrr {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: background .12s, transform .12s;
+  }
+  .net-m-shell .msrr:active { background: var(--surface2); transform: scale(.985); }
+  .net-m-shell .msrr-chip {
+    padding: 3px 7px; border-radius: 3px;
+    font-size: 9px; font-weight: 700;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    background: rgba(88,166,255,.15); color: var(--accent);
+    flex-shrink: 0;
+  }
+  .net-m-shell .msrr-info { flex: 1; min-width: 0; }
+  .net-m-shell .msrr-name {
+    font-size: 13px; font-weight: 600;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    color: var(--text);
+  }
+  .net-m-shell .msrr-sub {
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 10px; color: var(--text-muted);
+    margin-top: 2px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  /* Port grid — minmax(0, 1fr) prevents any child's intrinsic
+     size (e.g. a long speed label) from forcing the column
+     wider than its share and blowing out the row. */
+  .net-m-shell .mport-grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 6px;
+    margin-bottom: 14px;
+    max-width: 100%;
+    min-width: 0;
+  }
+  .net-m-shell .mport { min-width: 0; }
+  .net-m-shell .mport {
+    aspect-ratio: 1;
+    border-radius: 6px;
+    border: 1.5px solid var(--border);
+    background: var(--surface2);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 1px;
+    cursor: pointer;
+    transition: transform .1s;
+  }
+  .net-m-shell .mport:active { transform: scale(.9); }
+  .net-m-shell .mport.up {
+    border-color: var(--green);
+    background: rgba(63,185,80,.12);
+  }
+  .net-m-shell .mport.recently-down {
+    box-shadow: inset 0 0 0 2px var(--yellow);
+  }
+  .net-m-shell .mport.warn {
+    border-color: var(--yellow);
+    background: rgba(210,153,34,.12);
+  }
+  .net-m-shell .mport.sel {
+    border-color: var(--accent);
+    background: rgba(88,166,255,.15);
+    box-shadow: 0 0 0 2px rgba(88,166,255,.28);
+    transform: scale(1.06);
+  }
+  .net-m-shell .mport.sel:active { transform: scale(.98); }
+  .net-m-shell .mport-num {
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 10px; font-weight: 700;
+    color: var(--text-muted);
+  }
+  .net-m-shell .mport.up   .mport-num { color: var(--green); }
+  .net-m-shell .mport.warn .mport-num { color: var(--yellow); }
+  .net-m-shell .mport.sel  .mport-num { color: var(--accent); }
+  .net-m-shell .mport-spd {
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 8px;
+    color: var(--text-muted);
+  }
+
+  /* Port detail block (inline under grid) */
+  .net-m-shell .mpdet {
+    background: var(--surface);
+    border: 1px solid var(--accent);
+    border-radius: 9px;
+    overflow: hidden;
+    margin-bottom: 14px;
+  }
+  .net-m-shell .mpdet-hdr {
+    display: flex; align-items: center; gap: 11px;
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+    min-width: 0;
+    max-width: 100%;
+  }
+  .net-m-shell .mpdet-num {
+    width: 38px; height: 38px;
+    border-radius: 7px;
+    border: 1.5px solid var(--accent);
+    background: rgba(88,166,255,.15);
+    display: flex; align-items: center; justify-content: center;
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 12px; font-weight: 700;
+    color: var(--accent);
+    flex-shrink: 0;
+  }
+  .net-m-shell .mpdet-info { flex: 1; min-width: 0; }
+  .net-m-shell .mpdet-name {
+    font-size: 13px; font-weight: 700;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    color: var(--text);
+  }
+  .net-m-shell .mpdet-status {
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 10px; margin-top: 2px;
+  }
+  .net-m-shell .mpdet-body {
+    padding: 12px;
+    display: flex; flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .net-m-shell .mpdet-body > div { min-width: 0; max-width: 100%; }
+  .net-m-shell .mflbl {
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--text-muted); margin-bottom: 4px;
+  }
+  .net-m-shell .mfinput {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 9px 12px;
+    color: var(--text);
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 12px;
+    outline: none;
+    width: 100%;
+    font-family: inherit;
+  }
+  .net-m-shell .mfinput:focus { border-color: var(--accent); }
+  .net-m-shell .mvbox {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    overflow: hidden;
+  }
+  .net-m-shell .mvbox-hdr {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .net-m-shell .mvbox-title {
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .net-m-shell .mvadd {
+    width: 26px; height: 26px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-muted);
+    font-size: 15px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-family: inherit;
+  }
+  .net-m-shell .mvadd:active {
+    background: rgba(88,166,255,.15);
+    color: var(--accent);
+    border-color: var(--accent);
+    transform: scale(.9);
+  }
+  .net-m-shell .mvrow {
+    display: flex; align-items: center; gap: 9px;
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--border);
+    min-width: 0;
+    max-width: 100%;
+  }
+  .net-m-shell .mvrow:last-child { border-bottom: none; }
+  .net-m-shell .mvrow-id {
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 11px; font-weight: 700;
+    color: var(--accent);
+    width: 40px; flex-shrink: 0;
+  }
+  .net-m-shell .mvrow-name {
+    flex: 1; min-width: 0;
+    font-size: 13px; font-weight: 500;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    color: var(--text);
+  }
+  .net-m-shell .mvrow-mode {
+    display: flex; border-radius: 5px; overflow: hidden;
+    border: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .net-m-shell .mvmb {
+    padding: 4px 9px; font-size: 10px; font-weight: 700;
+    letter-spacing: 0.05em; text-transform: uppercase;
+    background: var(--surface); color: var(--text-muted);
+    cursor: pointer; border: none;
+    font-family: inherit;
+  }
+  .net-m-shell .mvmb.active {
+    background: var(--accent); color: #000;
+  }
+  .net-m-shell .mvrem {
+    width: 24px; height: 24px;
+    border-radius: 5px;
+    border: 1px solid var(--border);
+    background: none;
+    color: var(--text-muted);
+    font-size: 12px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-family: inherit;
+    flex-shrink: 0;
+  }
+  .net-m-shell .mvrem:active {
+    background: rgba(248,81,73,.15);
+    color: var(--red);
+    border-color: var(--red);
+  }
+  .net-m-shell .marow {
+    display: flex; gap: 8px;
+  }
+  .net-m-shell .mabtn {
+    flex: 1; padding: 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
+    font-size: 13px; font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .net-m-shell .mabtn:active { transform: scale(.96); }
+  .net-m-shell .mabtn.pri {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #000;
+  }
+
+  /* Bottom-sheet VLAN picker */
+  .msheet-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.78);
+    backdrop-filter: blur(3px);
+    z-index: 200;
+    align-items: flex-end;
+  }
+  .msheet-overlay.open { display: flex; }
+  .msheet {
+    width: 100%;
+    background: var(--surface);
+    border-radius: 16px 16px 0 0;
+    border-top: 1px solid var(--accent);
+    max-height: 72dvh;
+    display: flex; flex-direction: column;
+    animation: msheet-up .2s ease-out;
+  }
+  @keyframes msheet-up {
+    from { transform: translateY(100%); }
+    to   { transform: translateY(0); }
+  }
+  .msheet-handle {
+    width: 32px; height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin: 9px auto 0;
+    flex-shrink: 0;
+  }
+  .msheet-title {
+    padding: 12px 16px 9px;
+    font-size: 14px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.04em;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    color: var(--text);
+  }
+  .msheet-list {
+    overflow-y: auto; flex: 1;
+    padding-bottom: env(safe-area-inset-bottom, 16px);
+  }
+  .msheet-item {
+    display: flex; align-items: center; gap: 11px;
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+  }
+  .msheet-item:active { background: var(--surface2); }
+  .msheet-item-id {
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 12px; font-weight: 700;
+    color: var(--accent);
+    width: 48px;
+  }
+  .msheet-item-name {
+    flex: 1; font-size: 14px; font-weight: 500;
+    color: var(--text);
+  }
+
+  /* QR scanner overlay */
+  .mqr-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.92);
+    z-index: 210;
+    flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 18px;
+    padding: 16px;
+  }
+  .mqr-overlay.open { display: flex; }
+  .mqr-hint-top, .mqr-hint {
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 11px; color: var(--text-muted);
+    letter-spacing: 0.05em; text-align: center;
+    padding: 0 20px;
+  }
+  .mqr-frame {
+    position: relative;
+    width: min(260px, 70vw);
+    aspect-ratio: 1;
+    background: #000;
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .mqr-frame video {
+    width: 100%; height: 100%; object-fit: cover;
+  }
+  .mqr-corners { position: absolute; inset: 0; pointer-events: none; }
+  .mqc {
+    position: absolute;
+    width: 22px; height: 22px;
+    border-color: var(--accent);
+    border-style: solid;
+  }
+  .mqc.tl { top: 8px; left: 8px; border-width: 2px 0 0 2px; border-radius: 4px 0 0 0; }
+  .mqc.tr { top: 8px; right: 8px; border-width: 2px 2px 0 0; border-radius: 0 4px 0 0; }
+  .mqc.bl { bottom: 8px; left: 8px; border-width: 0 0 2px 2px; border-radius: 0 0 0 4px; }
+  .mqc.br { bottom: 8px; right: 8px; border-width: 0 2px 2px 0; border-radius: 0 0 4px 0; }
+  .mqr-scanline {
+    position: absolute;
+    left: 8px; right: 8px; height: 2px;
+    background: var(--accent);
+    opacity: .7;
+    top: 8px;
+    animation: mqr-scan 2s ease-in-out infinite;
+    pointer-events: none;
+  }
+  @keyframes mqr-scan {
+    0%, 100% { top: 8px; }
+    50%      { top: calc(100% - 10px); }
+  }
+  .mqr-close {
+    padding: 11px 28px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
+    font-size: 13px; font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  /* Toast */
+  .mtoast {
+    display: none;
+    position: fixed;
+    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    left: 50%;
+    transform: translateX(-50%) translateY(70px);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 22px;
+    padding: 9px 18px;
+    font-size: 12px; font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+    z-index: 300;
+    transition: transform .22s cubic-bezier(.34,1.56,.64,1);
+    pointer-events: none;
+  }
+  .mtoast.show {
+    display: block;
+    transform: translateX(-50%) translateY(0);
+  }
+  .mtoast.ok   { border-color: var(--green); color: var(--green); }
+  .mtoast.warn { border-color: var(--yellow); color: var(--yellow); }
+  .mtoast.err  { border-color: var(--red); color: var(--red); }
+}
+
+/* ──────────────────────────────────────────────────────────────────── */
+/* Chromebook module — mobile shell (body.page-chromebook .cb-m-shell)  */
+/*                                                                       */
+/* Same pattern as .net-m-shell: one shell lives inside the existing    */
+/* .main wrapper of chromebook.html. At mobile viewport width, CSS      */
+/* hides every other direct child of .main and reveals the shell.      */
+/* Scanner is ZXing BrowserMultiFormatReader (1D + QR).                 */
+/* ──────────────────────────────────────────────────────────────────── */
+
+.cb-m-shell { display: none; }
+.cbms-sheet-overlay, .cbms-scanner-overlay, .cbms-toast { display: none; }
+
+/* Box-sizing reset scoped to the mobile shell subtree */
+.cb-m-shell,
+.cb-m-shell *,
+.cb-m-shell *::before,
+.cb-m-shell *::after,
+.cbms-sheet-overlay,
+.cbms-sheet-overlay *,
+.cbms-scanner-overlay,
+.cbms-scanner-overlay * {
+  box-sizing: border-box;
+}
+
+@media (max-width: 768px) {
+  /* Lock horizontal scroll and rubber-band */
+  body.page-chromebook {
+    overflow-x: hidden;
+    overscroll-behavior-x: none;
+    max-width: 100vw;
+  }
+  /* Hide every direct child of .main except the mobile shell and
+     the overlay primitives (sheets, scanner, toast) that need to
+     stay free-floating above the shell. Without the extra
+     :not() excludes the scanner overlay was getting
+     display:none'd even after .open was added, so getUserMedia
+     resolved but the <video> never painted. */
+  body.page-chromebook .main > :not(.cb-m-shell):not(.cbms-sheet-overlay):not(.cbms-scanner-overlay):not(.cbms-toast) {
+    display: none !important;
+  }
+  body.page-chromebook .cb-overlay {
+    display: none !important;
+  }
+  body.page-chromebook .main {
+    padding: 0 !important;
+    margin-top: 0 !important;
+    max-width: 100vw !important;
+    overflow-x: hidden;
+  }
+  body.page-chromebook .cb-m-shell {
+    display: flex;
+    flex-direction: column;
+    height: calc(100dvh - 50px);
+    max-width: 100vw;
+    overflow-x: hidden;
+    background: var(--bg, #0d1117);
+  }
+  body.page-chromebook .cb-m-shell .cbms-scroll {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    max-width: 100%;
+    padding: 14px 12px 32px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border, #30363d) transparent;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* ── Topbar ─────────────────────────────────────────────── */
+  .cb-m-shell .cbms-topbar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px 8px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+  }
+  .cb-m-shell .cbms-tb-btn {
+    width: 38px; height: 38px;
+    border-radius: 7px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text-muted);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 17px;
+    cursor: pointer;
+    flex-shrink: 0;
+    font-family: inherit;
+  }
+  .cb-m-shell .cbms-tb-btn:active { background: var(--border); transform: scale(.94); }
+  .cb-m-shell .cbms-tb-btn.active {
+    background: rgba(88,166,255,0.15);
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+  .cb-m-shell .cbms-tb-center { flex: 1; min-width: 0; max-width: 100%; overflow: hidden; }
+  .cb-m-shell .cbms-tb-title {
+    font-size: 16px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.03em;
+    line-height: 1.15;
+    color: var(--text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .cb-m-shell .cbms-tb-sub {
+    font-size: 10px;
+    color: var(--text-muted);
+    letter-spacing: 0.05em;
+    margin-top: 1px;
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  /* ── Screens ────────────────────────────────────────────── */
+  .cb-m-shell .cbms-screen {
+    display: none; flex-direction: column;
+    flex: 1; overflow: hidden;
+  }
+  .cb-m-shell .cbms-screen.active { display: flex; }
+  .cb-m-shell .cbms-empty {
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+
+  /* ── Section header ─────────────────────────────────────── */
+  .cb-m-shell .cbms-sec {
+    display: flex; align-items: center; gap: 8px;
+    margin: 12px 0 8px;
+  }
+  .cb-m-shell .cbms-sec:first-child { margin-top: 0; }
+  .cb-m-shell .cbms-sec-lbl {
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+  .cb-m-shell .cbms-sec-line { flex: 1; height: 1px; background: var(--border); }
+  .cb-m-shell .cbms-sec-ct {
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+
+  /* ── Root search bar ────────────────────────────────────── */
+  .cb-m-shell .cbms-searchbar {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0 12px;
+  }
+  .cb-m-shell .cbms-searchbar:focus-within { border-color: var(--accent); }
+  .cb-m-shell .cbms-search-icon { color: var(--text-muted); font-size: 13px; }
+  .cb-m-shell .cbms-searchbar input {
+    flex: 1;
+    background: none; border: none; outline: none;
+    color: var(--text);
+    font-size: 13px;
+    padding: 10px 0;
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    min-width: 0;
+  }
+  .cb-m-shell .cbms-searchbar input::placeholder { color: var(--text-muted); }
+
+  .cb-m-shell .cbms-root-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+    padding: 14px 4px 4px;
+    line-height: 1.5;
+  }
+  .cb-m-shell .cbms-kbd {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px;
+    border-radius: 5px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--accent);
+    font-size: 12px;
+    margin: 0 2px;
+    vertical-align: middle;
+  }
+  .cb-m-shell .cbms-divider-note {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    text-align: center;
+    padding: 14px 0 8px;
+    font-style: italic;
+  }
+
+  /* ── Mode tile (bulk scan launcher) ─────────────────────── */
+  .cb-m-shell .cbms-mode-tile {
+    width: 100%;
+    display: flex; align-items: center; gap: 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 14px;
+    cursor: pointer;
+    font-family: inherit;
+    color: var(--text);
+    text-align: left;
+    min-width: 0;
+  }
+  .cb-m-shell .cbms-mode-tile:active { background: var(--surface2); transform: scale(.99); }
+  .cb-m-shell .cbms-mode-icon {
+    width: 44px; height: 44px;
+    border-radius: 9px;
+    background: rgba(88,166,255,0.15);
+    color: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+  .cb-m-shell .cbms-mode-text { flex: 1; min-width: 0; }
+  .cb-m-shell .cbms-mode-title {
+    font-size: 14px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text);
+  }
+  .cb-m-shell .cbms-mode-sub {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 3px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .cb-m-shell .cbms-mode-chev {
+    color: var(--text-muted);
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+
+  /* ── Search results (card rows) ─────────────────────────── */
+  .cb-m-shell .cbms-result-row {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 11px 13px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: background .12s, transform .12s;
+    min-width: 0;
+  }
+  .cb-m-shell .cbms-result-row:active { background: var(--surface2); transform: scale(.985); }
+  .cb-m-shell .cbms-result-info { flex: 1; min-width: 0; }
+  .cb-m-shell .cbms-result-serial {
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 13px; font-weight: 700;
+    color: var(--text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .cb-m-shell .cbms-result-sub {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .cb-m-shell .cbms-result-arr { color: var(--text-muted); font-size: 14px; flex-shrink: 0; }
+
+  /* ── Device header card ─────────────────────────────────── */
+  .cb-m-shell .cbms-dev-hdr {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 14px;
+  }
+  .cb-m-shell .cbms-dev-hdr-top {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 12px;
+    min-width: 0;
+  }
+  .cb-m-shell .cbms-dev-serial {
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--text);
+    word-break: break-all;
+  }
+  .cb-m-shell .cbms-dev-model {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 3px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .cb-m-shell .cbms-badge {
+    padding: 4px 10px;
+    border-radius: 5px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+  .cb-m-shell .cbms-badge.ok { background: rgba(63,185,80,0.15); color: var(--green); }
+  .cb-m-shell .cbms-badge.warn { background: rgba(210,153,34,0.15); color: var(--yellow); }
+  .cb-m-shell .cbms-badge.bad { background: rgba(248,81,73,0.15); color: var(--red); }
+  .cb-m-shell .cbms-badge.muted { background: rgba(125,133,144,0.15); color: var(--text-muted); }
+
+  .cb-m-shell .cbms-dev-assigned {
+    border-top: 1px solid var(--border);
+    padding-top: 10px;
+  }
+  .cb-m-shell .cbms-dev-user-row {
+    display: flex; align-items: center; gap: 10px;
+    min-width: 0;
+  }
+  .cb-m-shell .cbms-dev-user-avatar {
+    width: 38px; height: 38px;
+    border-radius: 50%;
+    background: rgba(88,166,255,0.15);
+    color: var(--accent);
+    font-weight: 700;
+    font-size: 14px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .cb-m-shell .cbms-dev-user-info { flex: 1; min-width: 0; }
+  .cb-m-shell .cbms-dev-user-name {
+    font-size: 14px; font-weight: 600;
+    color: var(--text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .cb-m-shell .cbms-dev-user-meta {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .cb-m-shell .cbms-dev-user-change {
+    padding: 6px 11px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--accent);
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    font-family: inherit;
+    flex-shrink: 0;
+  }
+
+  /* ── K/V card ──────────────────────────────────────────── */
+  .cb-m-shell .cbms-kvcard {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 14px;
+  }
+  .cb-m-shell .cbms-kvrow {
+    display: flex;
+    padding: 10px 14px;
+    gap: 12px;
+    align-items: flex-start;
+    border-bottom: 1px solid var(--border);
+    min-width: 0;
+  }
+  .cb-m-shell .cbms-kvrow:last-child { border-bottom: none; }
+  .cb-m-shell .cbms-kvrow.clickable { cursor: pointer; }
+  .cb-m-shell .cbms-kvrow.clickable:active { background: var(--surface2); }
+  .cb-m-shell .cbms-kvkey {
+    font-size: 10px; font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    flex-shrink: 0;
+    width: 96px;
+    padding-top: 2px;
+  }
+  .cb-m-shell .cbms-kvval {
+    flex: 1; min-width: 0;
+    font-size: 13px;
+    color: var(--text);
+    word-break: break-word;
+  }
+  .cb-m-shell .cbms-kvval.mono {
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 12px;
+  }
+  .cb-m-shell .cbms-kvval .muted { color: var(--text-muted); }
+  .cb-m-shell .cbms-kvedit {
+    color: var(--accent);
+    font-size: 15px;
+    flex-shrink: 0;
+    cursor: pointer;
+    padding: 2px 4px;
+  }
+
+  /* ── Inline edit ────────────────────────────────────────── */
+  .cb-m-shell .cbms-inline-edit {
+    display: flex; gap: 6px;
+    width: 100%;
+    margin-top: 2px;
+    min-width: 0;
+  }
+  .cb-m-shell .cbms-inline-edit input {
+    flex: 1; min-width: 0;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 7px 10px;
+    color: var(--text);
+    font-size: 13px;
+    outline: none;
+    font-family: inherit;
+  }
+  .cb-m-shell .cbms-inline-edit input:focus { border-color: var(--accent); }
+  .cb-m-shell .cbms-inline-edit .cbms-ok-btn {
+    width: 32px;
+    background: var(--accent);
+    border: none;
+    border-radius: 6px;
+    color: #000;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    flex-shrink: 0;
+    font-family: inherit;
+  }
+  .cb-m-shell .cbms-inline-edit .cbms-x-btn {
+    width: 32px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-muted);
+    font-size: 14px;
+    cursor: pointer;
+    flex-shrink: 0;
+    font-family: inherit;
+  }
+
+  /* ── Flag pills ─────────────────────────────────────────── */
+  .cb-m-shell .cbms-flag-pills {
+    display: flex; gap: 6px;
+    flex-wrap: wrap;
+  }
+  .cb-m-shell .cbms-flag-pill {
+    padding: 5px 11px;
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .cb-m-shell .cbms-flag-pill.active.inv  { background: rgba(210,153,34,0.15); color: var(--yellow); border-color: var(--yellow); }
+  .cb-m-shell .cbms-flag-pill.active.rec  { background: rgba(88,166,255,0.15); color: var(--accent); border-color: var(--accent); }
+  .cb-m-shell .cbms-flag-pill.active.lost { background: rgba(248,81,73,0.15); color: var(--red); border-color: var(--red); }
+
+  /* ── Network card ───────────────────────────────────────── */
+  .cb-m-shell .cbms-netcard {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 14px;
+    min-width: 0;
+  }
+  .cb-m-shell .cbms-netcard-row {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 8px;
+    min-width: 0;
+  }
+  .cb-m-shell .cbms-netcard-row:last-child { margin-bottom: 0; }
+  .cb-m-shell .cbms-netcard-key {
+    font-size: 10px; color: var(--text-muted);
+    text-transform: uppercase;
+    width: 66px;
+    flex-shrink: 0;
+  }
+  .cb-m-shell .cbms-netcard-val {
+    flex: 1; min-width: 0;
+    font-size: 13px;
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    color: var(--text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .cb-m-shell .cbms-signal-bars {
+    display: inline-flex; align-items: flex-end; gap: 2px;
+    height: 12px; margin-right: 6px;
+  }
+  .cb-m-shell .cbms-signal-bars > span {
+    width: 3px;
+    background: var(--green);
+    border-radius: 1px;
+  }
+  .cb-m-shell .cbms-signal-bars > span:nth-child(1) { height: 30%; }
+  .cb-m-shell .cbms-signal-bars > span:nth-child(2) { height: 55%; }
+  .cb-m-shell .cbms-signal-bars > span:nth-child(3) { height: 80%; }
+  .cb-m-shell .cbms-signal-bars > span:nth-child(4) { height: 100%; }
+
+  /* ── Action list ────────────────────────────────────────── */
+  .cb-m-shell .cbms-action-list {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 14px;
+  }
+  .cb-m-shell .cbms-action-row {
+    display: flex; align-items: center;
+    padding: 13px 14px;
+    gap: 12px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    background: var(--surface);
+    min-width: 0;
+  }
+  .cb-m-shell .cbms-action-row:last-child { border-bottom: none; }
+  .cb-m-shell .cbms-action-row:active { background: var(--surface2); }
+  .cb-m-shell .cbms-action-icon {
+    font-size: 18px;
+    width: 22px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .cb-m-shell .cbms-action-label {
+    flex: 1;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    min-width: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .cb-m-shell .cbms-action-sub {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    flex-shrink: 1;
+    min-width: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .cb-m-shell .cbms-action-chev { color: var(--text-muted); font-size: 14px; flex-shrink: 0; }
+  .cb-m-shell .cbms-action-row.danger .cbms-action-icon,
+  .cb-m-shell .cbms-action-row.danger .cbms-action-label { color: var(--red); }
+  .cb-m-shell .cbms-action-row.warn .cbms-action-icon,
+  .cb-m-shell .cbms-action-row.warn .cbms-action-label { color: var(--yellow); }
+  .cb-m-shell .cbms-action-row.go .cbms-action-icon,
+  .cb-m-shell .cbms-action-row.go .cbms-action-label { color: var(--green); }
+
+  /* ── Primary/danger buttons ─────────────────────────────── */
+  .cb-m-shell .cbms-btn {
+    width: 100%;
+    padding: 14px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    font-family: inherit;
+    margin-bottom: 14px;
+  }
+  .cb-m-shell .cbms-btn:active { transform: scale(.98); }
+  .cb-m-shell .cbms-btn.primary {
+    background: var(--accent);
+    color: #000;
+    border-color: var(--accent);
+  }
+
+  /* ── Bulk scanner ───────────────────────────────────────── */
+  .cb-m-shell .cbms-bulk-vf-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 12px;
+  }
+  .cb-m-shell .cbms-bulk-vf-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 14px;
+    background: var(--surface2);
+    cursor: pointer;
+    border-bottom: 1px solid var(--border);
+  }
+  .cb-m-shell .cbms-bulk-vf-wrap.collapsed .cbms-bulk-vf-header { border-bottom: none; }
+  .cb-m-shell .cbms-bulk-vf-icon { font-size: 14px; }
+  .cb-m-shell .cbms-bulk-vf-title {
+    flex: 1;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text);
+  }
+  .cb-m-shell .cbms-bulk-vf-state {
+    font-size: 10px;
+    color: var(--green);
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 2px 7px;
+    border-radius: 3px;
+    background: rgba(63,185,80,0.15);
+  }
+  .cb-m-shell .cbms-bulk-vf-wrap.collapsed .cbms-bulk-vf-state {
+    color: var(--text-muted);
+    background: var(--surface2);
+  }
+  .cb-m-shell .cbms-bulk-vf-chev {
+    color: var(--text-muted);
+    font-size: 10px;
+    transition: transform 0.2s;
+  }
+  .cb-m-shell .cbms-bulk-vf-wrap.collapsed .cbms-bulk-vf-chev {
+    transform: rotate(-90deg);
+  }
+  .cb-m-shell .cbms-bulk-vf-wrap.collapsed .cbms-bulk-viewfinder { display: none; }
+  .cb-m-shell .cbms-bulk-viewfinder {
+    width: 100%;
+    aspect-ratio: 16/9;
+    background: #000;
+    position: relative;
+    overflow: hidden;
+  }
+  .cb-m-shell .cbms-bulk-viewfinder video {
+    width: 100%; height: 100%; object-fit: cover;
+  }
+  .cb-m-shell .cbms-bulk-viewfinder::before {
+    content: 'Scanner idle';
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-muted);
+    font-size: 10px;
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    pointer-events: none;
+    z-index: 1;
+  }
+  .cb-m-shell .cbms-bulk-viewfinder.active::before { display: none; }
+  .cb-m-shell .cbms-bulk-corners { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+  .cb-m-shell .cbms-bulk-corners .c {
+    position: absolute;
+    width: 22px; height: 22px;
+    border-color: var(--accent);
+    border-style: solid;
+  }
+  .cb-m-shell .cbms-bulk-corners .c.tl { top: 10px; left: 10px; border-width: 2px 0 0 2px; border-radius: 4px 0 0 0; }
+  .cb-m-shell .cbms-bulk-corners .c.tr { top: 10px; right: 10px; border-width: 2px 2px 0 0; border-radius: 0 4px 0 0; }
+  .cb-m-shell .cbms-bulk-corners .c.bl { bottom: 10px; left: 10px; border-width: 0 0 2px 2px; border-radius: 0 0 0 4px; }
+  .cb-m-shell .cbms-bulk-corners .c.br { bottom: 10px; right: 10px; border-width: 0 2px 2px 0; border-radius: 0 0 4px 0; }
+  .cb-m-shell .cbms-bulk-scanline {
+    position: absolute; left: 10px; right: 10px;
+    height: 2px;
+    background: var(--accent);
+    opacity: 0.7;
+    top: 10px;
+    animation: cbms-scan 2.2s ease-in-out infinite;
+    z-index: 2;
+  }
+  @keyframes cbms-scan {
+    0%, 100% { top: 10px; }
+    50% { top: calc(100% - 12px); }
+  }
+
+  .cb-m-shell .cbms-bulk-count {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 12px;
+    color: var(--text-muted);
+    text-align: center;
+    margin-bottom: 10px;
+  }
+  .cb-m-shell .cbms-bulk-count strong {
+    color: var(--accent);
+    font-size: 15px;
+    margin-right: 6px;
+  }
+
+  .cb-m-shell .cbms-bulk-rows {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 12px;
+  }
+  .cb-m-shell .cbms-bulk-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    min-width: 0;
+  }
+  .cb-m-shell .cbms-bulk-row:last-child { border-bottom: none; }
+  .cb-m-shell .cbms-bulk-row-num {
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 10px;
+    color: var(--text-muted);
+    width: 22px;
+    flex-shrink: 0;
+  }
+  .cb-m-shell .cbms-bulk-row-info { flex: 1; min-width: 0; }
+  .cb-m-shell .cbms-bulk-row-serial {
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 12px;
+    color: var(--text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .cb-m-shell .cbms-bulk-row-user {
+    font-size: 10px;
+    color: var(--text-muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .cb-m-shell .cbms-bulk-row-del {
+    width: 26px; height: 26px;
+    border-radius: 5px;
+    border: 1px solid var(--border);
+    background: none;
+    color: var(--text-muted);
+    font-size: 13px;
+    cursor: pointer;
+    flex-shrink: 0;
+    font-family: inherit;
+  }
+
+  /* ── Bottom sheet ───────────────────────────────────────── */
+  .cbms-sheet-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.78);
+    backdrop-filter: blur(3px);
+    z-index: 200;
+    align-items: flex-end;
+  }
+  .cbms-sheet-overlay.open { display: flex; }
+  .cbms-sheet {
+    width: 100%;
+    background: var(--surface);
+    border-radius: 16px 16px 0 0;
+    border-top: 1px solid var(--accent);
+    max-height: 78dvh;
+    display: flex; flex-direction: column;
+    animation: cbms-sheetup 0.22s ease-out;
+  }
+  @keyframes cbms-sheetup {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+  .cbms-sheet-handle {
+    width: 32px; height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin: 9px auto 0;
+    flex-shrink: 0;
+  }
+  .cbms-sheet-title {
+    padding: 12px 16px 9px;
+    font-size: 14px; font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    color: var(--text);
+  }
+  .cbms-sheet-search {
+    display: flex; gap: 8px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0 12px;
+    margin: 10px 12px 6px;
+    flex-shrink: 0;
+  }
+  .cbms-sheet-search input {
+    flex: 1;
+    background: none; border: none; outline: none;
+    color: var(--text);
+    font-size: 13px;
+    padding: 9px 0;
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    min-width: 0;
+  }
+  .cbms-sheet-body {
+    overflow-y: auto;
+    flex: 1;
+    padding: 4px 0 env(safe-area-inset-bottom, 16px);
+  }
+  .cbms-sheet-item {
+    display: flex; align-items: center; gap: 11px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    min-width: 0;
+  }
+  .cbms-sheet-item:last-child { border-bottom: none; }
+  .cbms-sheet-item:active { background: var(--surface2); }
+  .cbms-sheet-item-icon {
+    font-size: 16px;
+    width: 22px;
+    flex-shrink: 0;
+  }
+  .cbms-sheet-item-info { flex: 1; min-width: 0; }
+  .cbms-sheet-item-name {
+    font-size: 14px; font-weight: 600;
+    color: var(--text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .cbms-sheet-item-sub {
+    font-size: 10px; color: var(--text-muted);
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    margin-top: 1px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  /* ── Scanner overlay ────────────────────────────────────── */
+  .cbms-scanner-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.94);
+    z-index: 210;
+    flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 18px;
+    padding: 16px;
+  }
+  .cbms-scanner-overlay.open { display: flex; }
+  .cbms-scanner-top {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    letter-spacing: 0.05em;
+    text-align: center;
+  }
+  .cbms-scanner-frame {
+    position: relative;
+    width: min(500px, 92vw);
+    aspect-ratio: 16/9;
+    background: #000;
+    border-radius: 6px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .cbms-scanner-frame video {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    background: #000;
+  }
+  .cbms-scanner-corners { position: absolute; inset: 0; pointer-events: none; }
+  .cbms-sc {
+    position: absolute;
+    width: 22px; height: 22px;
+    border-color: var(--accent);
+    border-style: solid;
+  }
+  .cbms-sc.tl { top: 10px; left: 10px; border-width: 2px 0 0 2px; border-radius: 4px 0 0 0; }
+  .cbms-sc.tr { top: 10px; right: 10px; border-width: 2px 2px 0 0; border-radius: 0 4px 0 0; }
+  .cbms-sc.bl { bottom: 10px; left: 10px; border-width: 0 0 2px 2px; border-radius: 0 0 0 4px; }
+  .cbms-sc.br { bottom: 10px; right: 10px; border-width: 0 2px 2px 0; border-radius: 0 0 4px 0; }
+  .cbms-scanner-line {
+    position: absolute; left: 10px; right: 10px;
+    height: 2px;
+    background: var(--accent);
+    opacity: 0.7;
+    top: 10px;
+    animation: cbms-scan 2.2s ease-in-out infinite;
+  }
+  .cbms-scanner-hint {
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 0.05em;
+    text-align: center;
+  }
+  .cbms-zoom-bar {
+    display: flex; align-items: center; gap: 8px; padding: 8px 20px; width: 100%; max-width: 340px;
+  }
+  .cbms-bulk-zoom {
+    display: flex; align-items: center; gap: 8px; padding: 6px 0; margin-top: 4px;
+  }
+  .cbms-bulk-zoom input[type=range] { flex: 1; accent-color: #58a6ff; }
+
+  .cbms-scanner-close {
+    padding: 11px 28px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  /* ── Toast ──────────────────────────────────────────────── */
+  .cbms-toast {
+    display: none;
+    position: fixed;
+    bottom: calc(22px + env(safe-area-inset-bottom, 0));
+    left: 50%;
+    transform: translateX(-50%) translateY(70px);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 22px;
+    padding: 9px 18px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+    z-index: 310;
+    transition: transform 0.22s cubic-bezier(.34,1.56,.64,1);
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  .cbms-toast.show {
+    display: block;
+    transform: translateX(-50%) translateY(0);
+  }
+  .cbms-toast.ok { border-color: var(--green); color: var(--green); }
+  .cbms-toast.err { border-color: var(--red); color: var(--red); }
+  .cbms-toast.warn { border-color: var(--yellow); color: var(--yellow); }
+  .cbms-toast.info { border-color: var(--accent); color: var(--accent); }
+}

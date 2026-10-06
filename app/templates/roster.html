@@ -1,0 +1,1974 @@
+{# NOTE: The roster page handler must pass can_execute=True/False and modules dict to this template #}
+{% extends "_base.html" %}
+{% block title %}Roster{% endblock %}
+{% block page_css %}
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; font-size: 14px; min-height: 100vh; }
+
+/* Layout */
+.content { max-width: 1400px; margin: 24px auto; padding: 0 24px; overflow: hidden; }
+.page-title { font-size: 18px; font-weight: 600; margin-bottom: 20px; }
+.ferpa-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; background: rgba(188,140,255,0.15); color: #bc8cff; border: 1px solid rgba(188,140,255,0.3); margin-left: 8px; vertical-align: middle; }
+
+/* Summary cards (from v1 main.css) */
+.summary-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px; }
+.card-label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+.card-value { font-size: 28px; font-weight: 700; color: var(--text); }
+.card-value-sm { font-size: 16px; padding-top: 4px; }
+
+/* Panels (from v1 main.css) */
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 24px; overflow: hidden; }
+.panel-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.panel-header h2 { font-size: 14px; font-weight: 600; }
+
+/* Tables (from v1 main.css) */
+.data-table { width: 100%; border-collapse: collapse; table-layout: auto; }
+.data-table th { text-align: left; padding: 8px 10px; font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border); background: var(--surface2); white-space: nowrap; }
+.data-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; font-size: 13px; }
+.panel { overflow-x: auto; }
+.data-table tr:last-child td { border-bottom: none; }
+.data-table tr:hover td { background: var(--surface2); }
+.empty-row { text-align: center; color: var(--text-muted); padding: 32px; }
+.mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
+.building-badge { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; letter-spacing: 0.03em; }
+/* Google-OU chip — shows the OU short label next to the SIS building.
+   Match = subtle accent, mismatch = red so drift is easy to spot. */
+.ou-chip { display: inline-block; padding: 0 5px; border-radius: 3px; font-size: 9px; font-weight: 600; letter-spacing: 0.03em; margin-left: 4px; vertical-align: middle; }
+.ou-chip.match    { background: rgba(88,166,255,0.12); color: var(--accent); }
+.ou-chip.mismatch { background: rgba(248,81,73,0.15);  color: var(--red); }
+.ou-chip.archive  { background: rgba(248,81,73,0.15);  color: var(--red); }
+.ou-chip.unknown  { background: var(--surface2);       color: var(--text-muted); }
+
+/* Buttons (from v1 main.css) */
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: var(--surface2); color: var(--text); transition: background 0.15s, border-color 0.15s; text-decoration: none; }
+.btn:hover { background: var(--border); border-color: var(--text-muted); }
+.btn-primary { background: var(--accent-dim); border-color: var(--accent); color: var(--text); }
+.btn-primary:hover { background: var(--accent); }
+
+/* Tabs */
+.tab-bar { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid var(--border); }
+.tab-btn {
+    padding: 8px 16px; font-size: 13px; font-weight: 500; cursor: pointer;
+    background: none; border: none; color: var(--text-muted);
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+    transition: color 0.15s, border-color 0.15s; white-space: nowrap;
+}
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-btn:hover { color: var(--text); }
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+.filter-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+.filter-bar select, .filter-bar input {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+    padding: 5px 10px; border-radius: 5px; font-size: 13px;
+}
+.filter-bar input { min-width: 200px; }
+.change-badge {
+    display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; text-transform: uppercase;
+}
+.badge-added    { background: rgba(63,185,80,0.15);  color: var(--green); }
+.badge-removed  { background: rgba(248,81,73,0.15);  color: var(--red); }
+.badge-transferred { background: rgba(88,166,255,0.15); color: var(--accent); }
+.badge-grade_change { background: rgba(210,153,34,0.15); color: var(--yellow); }
+.badge-name_change  { background: rgba(210,153,34,0.15); color: var(--yellow); }
+.badge-email_noncompliant { background: rgba(248,81,73,0.15); color: var(--red); }
+.badge-missing_email { background: rgba(248,81,73,0.15); color: var(--red); }
+.badge-modified { background: rgba(125,133,144,0.15); color: var(--text-muted); }
+.actions-bar { display: flex; gap: 8px; margin-bottom: 20px; }
+.compliance-meter { height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; margin-top: 6px; }
+.compliance-fill  { height: 100%; background: var(--green); border-radius: 3px; transition: width 0.4s; }
+.tab-count {
+    display: inline-block; min-width: 18px; padding: 0 5px;
+    background: var(--surface2); border-radius: 10px;
+    font-size: 11px; font-weight: 600; color: var(--text-muted);
+    line-height: 18px; text-align: center; margin-left: 5px; vertical-align: middle;
+}
+.tab-btn.active .tab-count { background: rgba(88,166,255,0.15); color: var(--accent); }
+/* Status indicators */
+.status-ok { color: var(--green); font-weight: 600; }
+.status-miss { color: var(--red); font-weight: 600; }
+.status-warn { color: var(--yellow); font-weight: 600; }
+.issue-tag {
+    display: inline-block; padding: 1px 6px; border-radius: 3px;
+    font-size: 10px; font-weight: 600; margin-right: 3px;
+    background: rgba(125,133,144,0.15); color: var(--text-muted);
+}
+/* Red — critical, needs action */
+.issue-tag.no_google { background: rgba(248,81,73,0.15); color: var(--red); }
+.issue-tag.no_email { background: rgba(248,81,73,0.15); color: var(--red); }
+/* Orange — email issues */
+.issue-tag.idm_error { background: rgba(210,153,34,0.15); color: var(--yellow); }
+.issue-tag.wrong_format { background: rgba(210,153,34,0.15); color: var(--yellow); }
+.issue-tag.email_noncompliant { background: rgba(210,153,34,0.15); color: var(--yellow); }
+/* Purple — out of district */
+.issue-tag.wrong_domain { background: rgba(163,113,247,0.15); color: #a371f7; }
+/* Blue — needs confirmation */
+.issue-tag.id_confirm { background: rgba(88,166,255,0.15); color: var(--accent); cursor: pointer; }
+.issue-tag.id_confirm:hover { background: rgba(88,166,255,0.3); }
+/* Info — active in SIS but no class enrollments */
+.issue-tag.no-classes { background: rgba(88,166,255,0.15); color: var(--accent); }
+/* Deprovision-sweep controls — only rendered on qualifying rows
+   (non-district email + no class enrollments). Yellow = candidate,
+   click to protect. Green = protected, click to unprotect. */
+.issue-tag.deprov-candidate {
+    background: rgba(210,153,34,0.15); color: var(--yellow);
+    cursor: pointer;
+}
+.issue-tag.deprov-candidate:hover { background: rgba(210,153,34,0.3); }
+.issue-tag.deprov-exempted {
+    background: rgba(63,185,80,0.15); color: var(--green);
+    cursor: pointer;
+}
+.issue-tag.deprov-exempted:hover { background: rgba(63,185,80,0.3); }
+.new-badge { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: 600; background: rgba(63,185,80,0.15); color: var(--green); margin-right: 4px; }
+.dir-count { font-size: 12px; color: var(--text-muted); margin-left: 8px; }
+.copyable:hover { background: rgba(88,166,255,0.06); }
+/* Student profile overlay */
+.student-overlay {
+    display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(2,12,34,0.85); z-index: 100; overflow-y: auto; padding: 40px 20px;
+}
+.student-overlay.active { display: flex; justify-content: center; align-items: flex-start; }
+.student-profile {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 24px; max-width: 700px; width: 100%; max-height: 85vh; overflow-y: auto;
+}
+.sp-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.sp-header h2 { margin: 0; font-size: 18px; }
+.sp-close { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 24px; padding: 4px 8px; }
+.sp-section { margin-bottom: 16px; }
+.sp-section h4 { margin: 0 0 8px; font-size: 13px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.05em; }
+.sp-table { width: 100%; border-collapse: collapse; table-layout: auto; }
+.sp-table th { text-align: left; padding: 6px 8px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); border-bottom: 1px solid var(--border); }
+.sp-table td { padding: 6px 8px; border-bottom: 1px solid rgba(48,54,61,0.5); }
+.sp-table tr:hover td { background: rgba(255,255,255,0.02); }
+.sp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 20px; }
+.sp-field label { font-size: 11px; color: var(--text-muted); display: block; }
+.sp-field span { font-size: 13px; color: var(--text); }
+.sp-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+.sp-badge.ok { background: rgba(63,185,80,0.15); color: var(--green); }
+.sp-badge.miss { background: rgba(248,81,73,0.15); color: var(--red); }
+.sp-badge.warn { background: rgba(210,153,34,0.15); color: var(--yellow); }
+.sp-badge.info { background: rgba(88,166,255,0.15); color: var(--accent); }
+.sp-timeline { border-left: 2px solid var(--border); padding-left: 14px; margin-top: 8px; }
+.sp-timeline .tl-item { margin-bottom: 8px; font-size: 12px; position: relative; }
+.sp-timeline .tl-item::before { content: ''; position: absolute; left: -19px; top: 5px; width: 8px; height: 8px; border-radius: 50%; background: var(--border); }
+.sp-timeline .tl-date { color: var(--text-muted); font-size: 11px; }
+tr.inactive-row { opacity: 0.45; }
+tr.inactive-row:hover { opacity: 0.7; }
+.toggle-wrap { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-muted); cursor: pointer; user-select: none; }
+.toggle-wrap input { accent-color: var(--accent); cursor: pointer; }
+#tab-directory .panel { max-height: calc(100vh - 280px); overflow-y: auto; }
+#tab-directory .data-table thead th { position: sticky; top: 0; background: var(--surface); z-index: 2; box-shadow: 0 1px 0 var(--border); }
+</style>
+{% endblock %}
+{% block content %}
+<div class="content">
+
+<h1 class="page-title">Roster <span class="ferpa-badge">FERPA PROTECTED</span></h1>
+
+<!-- Summary cards -->
+<div class="summary-cards" style="margin-bottom:24px">
+    <div class="card">
+        <div class="card-label">Enrolled Students</div>
+        <div class="card-value" id="stat-total">&mdash;</div>
+    </div>
+    <div class="card">
+        <div class="card-label">New Enrollments</div>
+        <div class="card-value" id="stat-new">&mdash;</div>
+    </div>
+    <div class="card">
+        <div class="card-label">Issues</div>
+        <div class="card-value" id="stat-issues">&mdash;</div>
+    </div>
+    <div class="card">
+        <div class="card-label">Last Import</div>
+        <div class="card-value card-value-sm" id="stat-last-import">&mdash;</div>
+    </div>
+</div>
+
+<!-- Action buttons -->
+<div class="actions-bar">
+    <button class="btn btn-primary" id="btn-import" style="display:none">&#9654; Run Import Now</button>
+    <button class="btn" id="btn-upload" style="display:none">&#128196; Upload CSV</button>
+    <input type="file" id="csv-upload-input" accept=".csv" multiple style="display:none">
+    <button class="btn" id="btn-recheck" style="display:none">&#8635; Recheck Google</button>
+    <button class="btn" id="btn-backfill" style="display:none" title="Provision Google accounts for students still missing one — useful after enabling student_google_writes_enabled">&#128257; Backfill Google</button>
+    <a class="btn" href="/roster/exports" title="Download student data as CSVs formatted for external apps (SWIS PBIS, etc.)">&#128196; Exports</a>
+    <a class="btn" href="/roster/clever-verify" title="Upload a Clever Students CSV to spot-check drift vs Nexus. Read-only — sets the C ✓ / ⚠ badge on each student.">&#128269; Clever Import</a>
+    {% if modules.get('roster_analytics') %}<a class="btn" href="/roster/analytics" title="Enrollment, Google lifecycle, IT capacity, engagement, anomaly">&#128200; Analytics</a>{% endif %}
+    <span id="import-status" style="font-size:13px;color:var(--text-muted);align-self:center"></span>
+</div>
+
+<!-- Tabs -->
+<div class="tab-bar">
+    <button class="tab-btn active" data-action="switch-tab" data-tab="directory">All Students <span class="tab-count" id="tab-count-directory"></span></button>
+    <button class="tab-btn" data-action="switch-tab" data-tab="changes">Change Log <span class="tab-count" id="tab-count-changes"></span></button>
+    <button class="tab-btn" data-action="switch-tab" data-tab="gaudit">Google Audit</button>
+    <button class="tab-btn" data-action="switch-tab" data-tab="guidance">Guidance Queue <span class="tab-count" id="tab-count-guidance"></span></button>
+</div>
+
+<!-- Tab: All Students -->
+<div id="tab-directory" class="tab-pane active">
+    <div class="filter-bar">
+        <select id="dir-school" data-action="dir-reload">
+            <option value="ALL">All Schools</option>
+        </select>
+        <select id="dir-issue" data-action="dir-reload">
+            <option value="">All Students</option>
+            <option value="new">New Enrollments</option>
+            <option value="changes">Changes</option>
+            <option value="any">Issues Only</option>
+            <option value="no_google">Missing Google Account</option>
+            <option value="wrong_domain">Out of District</option>
+        </select>
+        <select id="dir-days" data-action="dir-reload" style="display:none">
+            <option value="1">Today</option>
+            <option value="3">Last 3 Days</option>
+            <option value="7" selected>Last 7 Days</option>
+            <option value="14">Last 14 Days</option>
+            <option value="30">Last 30 Days</option>
+            <option value="90">Last 90 Days</option>
+        </select>
+        <span id="sis-export-btns" style="display:none">
+            <button class="btn" id="btn-export-sis-email">&#8595; SIS Email CSV</button>
+            <a id="sis-import-link" href="#" target="_blank" class="btn" style="text-decoration:none;display:none">&#8599; SIS Import</a>
+        </span>
+        <button class="btn" id="btn-export-nutrikids-full" title="Full NutriKids CSV of every active student. Use for start-of-year initial setup — not the weekly diff.">&#8595; NutriKids (Full)</button>
+        <input type="text" id="dir-search" placeholder="Search name, SID, or email...">
+        <label class="toggle-wrap">
+            <input type="checkbox" id="dir-inactive" data-action="dir-reload">
+            Show Inactive <span id="inactive-count" style="font-size:11px"></span>
+        </label>
+        <label class="toggle-wrap" title="Uncheck to hide kids without any class assignments">
+            <input type="checkbox" id="dir-unenrolled" data-action="dir-reload" checked>
+            Show Unenrolled <span id="unenrolled-count" style="font-size:11px"></span>
+        </label>
+        <span class="dir-count" id="dir-count"></span>
+    </div>
+    <div class="panel">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Student</th>
+                    <th>SID</th>
+                    <th>Bldg</th>
+                    <th>Gr</th>
+                    <th>Homeroom</th>
+                    <th style="text-align:center">SIS</th>
+                    <th style="text-align:center">G</th>
+                    <th>SIS Email</th>
+                    <th>Google Email</th>
+                    <th>Issues</th>
+                </tr>
+            </thead>
+            <tbody id="directory-body">
+                <tr><td colspan="10" class="empty-row">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;font-size:12px;color:var(--text-muted)">
+      <span id="dir-page-info"></span>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span>Per page:</span>
+        <select id="dir-page-size" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:3px 8px;border-radius:4px;font-size:12px">
+          <option value="25">25</option>
+          <option value="50" selected>50</option>
+          <option value="100">100</option>
+          <option value="200">200</option>
+        </select>
+        <button class="btn" style="padding:4px 10px;font-size:11px" id="dir-prev" disabled>Prev</button>
+        <button class="btn" style="padding:4px 10px;font-size:11px" id="dir-next">Next</button>
+      </div>
+    </div>
+</div>
+
+<!-- Tab: Change Log -->
+<div id="tab-changes" class="tab-pane">
+    <div class="filter-bar">
+        <select id="filter-school" data-action="reload-changes">
+            <option value="ALL">All Schools</option>
+        </select>
+        <select id="filter-type" data-action="reload-changes">
+            <option value="">All Changes</option>
+            <option value="added">New Enrollment</option>
+            <option value="removed">Withdrawal</option>
+            <option value="transferred">Transfer</option>
+            <option value="grade_change">Grade Change</option>
+            <option value="name_change">Name Change</option>
+        </select>
+        <select id="filter-days" data-action="reload-changes">
+            <option value="7">Last 7 days</option>
+            <option value="30" selected>Last 30 days</option>
+            <option value="90">Last 90 days</option>
+            <option value="365">This school year</option>
+        </select>
+        <button class="btn" id="btn-export-nutrikids">&#8595; Nutrikids CSV</button>
+    </div>
+    <div class="panel">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Student</th>
+                    <th>Email</th>
+                    <th>SID</th>
+                    <th>Building</th>
+                    <th>Grade</th>
+                    <th>Homeroom</th>
+                    <th>Change</th>
+                </tr>
+            </thead>
+            <tbody id="changes-body">
+                <tr><td colspan="8" class="empty-row">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Tab: Google Audit -->
+<div id="tab-gaudit" class="tab-pane">
+    <div class="panel">
+        <div class="panel-header">
+            <h2>Google Workspace Change Log</h2>
+            <span style="font-size:13px;color:var(--text-muted)">Up to 60 days &middot; newest first</span>
+        </div>
+        <div class="filter-bar" style="margin-bottom:12px">
+            <select id="gaudit-days" data-action="reload-gaudit">
+                <option value="7">Last 7 days</option>
+                <option value="30" selected>Last 30 days</option>
+                <option value="60">Last 60 days</option>
+            </select>
+            <select id="gaudit-action" data-action="reload-gaudit">
+                <option value="">All Actions</option>
+                <option value="create_account">Account Created</option>
+                <option value="rename_account">Email Renamed</option>
+                <option value="set_student_id">Student ID Set</option>
+                <option value="reactivate_account">Reactivated</option>
+                <option value="suspend_account">Suspended</option>
+            </select>
+        </div>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Date / Time</th>
+                    <th>Actor</th>
+                    <th>Action</th>
+                    <th>Account</th>
+                    <th>Change</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="gaudit-body">
+                <tr><td colspan="7" class="empty-row">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Tab: Guidance Queue -->
+<div id="tab-guidance" class="tab-pane">
+    <div class="filter-bar" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <div class="gq-category-nav" style="display:flex;gap:2px;border:1px solid var(--border);border-radius:6px;overflow:hidden">
+            <button class="gq-cat-btn active" data-action="gq-cat" data-cat="enrollment" style="padding:6px 12px;background:var(--surface2);border:0;color:var(--text);cursor:pointer;font-size:13px">Enrollments <span class="gq-cat-count" id="gq-cnt-enrollment" style="opacity:.7">—</span></button>
+            <button class="gq-cat-btn" data-action="gq-cat" data-cat="transfer" style="padding:6px 12px;background:transparent;border:0;color:var(--text-muted);cursor:pointer;font-size:13px">Transfers <span class="gq-cat-count" id="gq-cnt-transfer" style="opacity:.7">—</span></button>
+            <button class="gq-cat-btn" data-action="gq-cat" data-cat="withdrawal" style="padding:6px 12px;background:transparent;border:0;color:var(--text-muted);cursor:pointer;font-size:13px">Withdrawals <span class="gq-cat-count" id="gq-cnt-withdrawal" style="opacity:.7">—</span></button>
+            <button class="gq-cat-btn" data-action="gq-cat" data-cat="" style="padding:6px 12px;background:transparent;border:0;color:var(--text-muted);cursor:pointer;font-size:13px">All</button>
+        </div>
+        <select id="gq-school" data-action="reload-guidance">
+            <option value="ALL">All Schools</option>
+        </select>
+        <select id="gq-status" data-action="reload-guidance">
+            <option value="pending">Pending</option>
+            <option value="scheduled">Scheduled</option>
+            <option value="all">All</option>
+        </select>
+        <button class="btn" id="btn-auto-resolve" style="display:none">&#8635; Auto-Resolve</button>
+        <button class="btn" id="btn-scan-enrollments" style="display:none" title="Scan the roster for recent enrollees and withdrawals and queue any that need counselor attention. Manual trigger until the automated system is enabled in Settings.">&#43; Queue New Enrollees</button>
+    </div>
+    <div class="panel">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Student</th>
+                    <th>SID</th>
+                    <th>Grade</th>
+                    <th>School</th>
+                    <th>Counselor</th>
+                    <th>Google Email</th>
+                    <th>Status</th>
+                    <th>Added</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="guidance-body">
+                <tr><td colspan="9" class="empty-row">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+</div><!-- /.content -->
+
+<!-- Student profile overlay -->
+<div class="student-overlay" id="student-overlay" data-action="close-profile-bg">
+    <div class="student-profile">
+        <div class="sp-header">
+            <h2 id="sp-name">Student</h2>
+            <button class="sp-close" data-action="close-profile">&times;</button>
+        </div>
+        <div id="sp-content"><p style="color:var(--text-muted)">Loading...</p></div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script nonce="{{ request.state.csp_nonce }}">
+const H = {'X-Requested-With': 'CommandNexus'};
+
+// Minimal HTML-attribute-safe escape — used for values rendered into
+// data-* attributes via template literals (names with quotes would
+// otherwise break the attribute).
+function esc(s) { const d = document.createElement('div'); d.textContent = String(s ?? ''); return d.innerHTML; }
+
+function copyField(el) {
+  const text = el.textContent.trim();
+  if (!text || text === '\u2014') return;
+  // Fallback for non-HTTPS: use a temporary textarea
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  document.execCommand('copy');
+  document.body.removeChild(ta);
+  const orig = el.style.background;
+  el.style.background = 'rgba(63,185,80,0.15)';
+  setTimeout(() => el.style.background = orig, 400);
+}
+const HJ = {...H, 'Content-Type': 'application/json'};
+
+const CAN_WRITE = {{ 'true' if can_execute else 'false' }};
+const ISSUE_LABELS = {
+    no_google: 'No Google',
+    no_email: 'No Email',
+    wrong_domain: 'Out of District',
+    idm_error: 'IDM Error',
+    wrong_format: 'Wrong Format',
+    email_noncompliant: 'Email Issue',
+    id_confirm: 'ID Match?',
+};
+const COMPLIANCE_LABELS = {
+    wrong_domain: 'Out of District',
+    year_mismatch: 'Wrong Year',
+    format_mismatch: 'Wrong Format',
+    name_mismatch: 'Name Mismatch',
+    insufficient_data: 'No Data',
+};
+
+let _dirData = null;
+let rosterPage = 0;
+let rosterPageSize = 50;
+let _searchTimer = null;
+
+// Show write-only buttons if authorized
+if (CAN_WRITE) {
+    document.getElementById('btn-import').style.display = '';
+    document.getElementById('btn-upload').style.display = '';
+    document.getElementById('btn-recheck').style.display = '';
+    document.getElementById('btn-backfill').style.display = '';
+    document.getElementById('btn-auto-resolve').style.display = '';
+    document.getElementById('btn-scan-enrollments').style.display = '';
+}
+
+function setTabCount(tab, n) {
+    const el = document.getElementById('tab-count-' + tab);
+    if (el) el.textContent = n != null ? n : '';
+}
+
+// ── Directory tab ────────────────────────────────────────────────────────
+
+async function loadDirectory() {
+    const school = document.getElementById('dir-school').value;
+    const issue = document.getElementById('dir-issue').value;
+    const search = document.getElementById('dir-search').value.trim();
+    const showInactive = document.getElementById('dir-inactive').checked;
+    const daysEl = document.getElementById('dir-days');
+
+    // Show/hide days dropdown and SIS export buttons
+    const dayRangeFilter = (issue === 'changes' || issue === 'new');
+    daysEl.style.display = dayRangeFilter ? '' : 'none';
+    // SIS export buttons only make sense for new-enrollment context, not for
+    // change history (which includes withdrawals).
+    document.getElementById('sis-export-btns').style.display = issue === 'new' ? '' : 'none';
+
+    const showUnenrolled = document.getElementById('dir-unenrolled')?.checked;
+
+    const params = new URLSearchParams({limit: String(rosterPageSize), offset: String(rosterPage * rosterPageSize)});
+    if (school !== 'ALL') params.set('school', school);
+    if (issue) params.set('issue', issue);
+    if (search) params.set('search', search);
+    if (showInactive) params.set('status', '');
+    params.set('show_unenrolled', showUnenrolled ? 'true' : 'false');
+    if (dayRangeFilter) params.set('days', daysEl.value);
+
+    const tbody = document.getElementById('directory-body');
+    tbody.innerHTML = '<tr><td colspan="10" class="empty-row">Loading...</td></tr>';
+    try {
+        const data = await fetch('/api/roster/students?' + params, {headers: H}).then(r => r.json());
+        _dirData = data;
+        renderDirectory(data);
+        document.getElementById('stat-total').textContent = data.total_enrolled ?? data.total_active ?? data.total;
+        if (data.last_import)
+            document.getElementById('stat-last-import').textContent = new Date(data.last_import).toLocaleString('en-US', {timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true});
+        const ic = data.issue_counts || {};
+        document.getElementById('stat-issues').textContent = ic.any || 0;
+        document.getElementById('stat-issues').style.color = ic.any > 0 ? 'var(--red)' : 'var(--text-muted)';
+        document.getElementById('stat-new').textContent = ic.new || 0;
+        setTabCount('directory', data.total);
+        const inactiveEl = document.getElementById('inactive-count');
+        if (data.total_inactive != null) inactiveEl.textContent = '(' + data.total_inactive + ')';
+        const unenrolledEl = document.getElementById('unenrolled-count');
+        if (data.total_unenrolled != null) unenrolledEl.textContent = '(' + data.total_unenrolled + ')';
+        renderRosterPagination(data.total);
+    } catch(e) {
+        console.error(e);
+        tbody.innerHTML = '<tr><td colspan="10" class="empty-row">Error loading directory</td></tr>';
+    }
+}
+
+function renderDirectory(data) {
+    const tbody = document.getElementById('directory-body');
+    const students = data.students || [];
+    document.getElementById('dir-count').textContent = students.length + ' students';
+
+    if (!students.length) {
+        tbody.innerHTML = '<tr><td colspan="10" class="empty-row">No students found</td></tr>';
+        return;
+    }
+    tbody.innerHTML = students.map(s => {
+        // SIS column: enrollment status. Inactive = student is no longer in the
+        // SIS report (withdrawn), so the SIS column should read ✗ regardless
+        // of whether their old SIS email is still cached on the row.
+        const sisIcon = (s.is_active === false)
+            ? '<span class="status-miss" title="Withdrawn — not in latest SIS">&#10007;</span>'
+            : (s.has_sis_email
+                ? '<span class="status-ok">&#10003;</span>'
+                : '<span class="status-miss">&#10007;</span>');
+        // Google column: actual google account state. Stays ✓ as long as the
+        // account is enabled — it only flips ✗ after the auto-suspend runs
+        // (gated by roster.student_google_writes_enabled).
+        const googleIcon = s.has_google
+            ? '<span class="status-ok">&#10003;</span>'
+            : '<span class="status-miss">&#10007;</span>';
+        // Clever-verify indicator — inline pill next to SIS. Only
+        // shows after a Clever CSV has been uploaded that contained
+        // this student's sis_id. Null = not checked in latest upload.
+        let cleverIcon = '';
+        if (s.clever_verify) {
+            if (s.clever_verify.matched) {
+                cleverIcon = ` <span class="status-ok" title="Clever match (checked ${s.clever_verify.checked_at || ''})">C&#10003;</span>`;
+            } else {
+                const rows = (s.clever_verify.mismatches || []).map(m =>
+                    `${m.field}: Clever="${m.sis_value}" ↔ Roster="${m.roster_value}"`).join('\n');
+                cleverIcon = ` <span class="status-miss" title="Clever mismatch:\n${rows}">C&#9888;</span>`;
+            }
+        }
+        const hr = s.homeroom
+            ? `<span title="${s.homeroom.email}">${s.homeroom.name}</span>`
+            : '<span style="color:var(--text-muted)">&mdash;</span>';
+
+        // Issue tags — use specific reason for email issues
+        const issues = s.issues.map(i => {
+            if (i === 'email_noncompliant' && s.compliance_issue) {
+                const label = COMPLIANCE_LABELS[s.compliance_issue] || s.compliance_issue;
+                return `<span class="issue-tag ${i}">${label}</span>`;
+            }
+            if (i === 'id_confirm' && CAN_WRITE) {
+                const gn = s.google_name ? ` (Google: ${s.google_name})` : '';
+                return `<span class="issue-tag ${i}" title="SIS: ${s.name} / Google: ${s.google_name}${'\n'}Click to confirm ID match" data-action="confirm-id-match" data-sid="${s.student_id}" data-google-email="${s.google_email}" data-sis-name="${esc(s.name)}" data-google-name="${esc(s.google_name)}">ID Match?</span>`;
+            }
+            return `<span class="issue-tag ${i}">${ISSUE_LABELS[i] || i}</span>`;
+        }).join('');
+        // "No classes" — kid is active in the SIS but has zero rows in
+        // student_teachers. Rendered as an issue tag so it lives with the
+        // other row badges and is easy to scan for when troubleshooting.
+        const noClasses = (s.has_enrollments === false && s.is_active !== false)
+          ? '<span class="issue-tag no-classes" title="Active in SIS but no class assignments loaded">No classes</span>'
+          : '';
+        // Attendance chip — YTD absence count (school year Aug 1
+        // through today). Amber when the count is climbing toward the
+        // Ohio chronic-absence bar (~10% of enrolled days); grey
+        // otherwise. Chronic flag itself is computed nightly in Phase C.
+        const absN = s.absences_ytd || 0;
+        const absChip = absN > 0
+          ? `<span class="issue-tag" style="background:${absN>=10?'rgba(210,153,34,0.15)':'rgba(139,148,158,0.15)'};color:${absN>=10?'var(--yellow)':'var(--text-muted)'}" title="${absN} absence${absN===1?'':'s'} school year to date">${absN} abs</span>`
+          : '';
+        // Deprovision-exemption toggle — only appears when the sweep would
+        // consider this kid (non-district email + no classes). Click to
+        // protect from the sweep; click again to un-protect. Alt-program
+        // enrollments don't show up in the SIS Enrollments feed, so this
+        // manual tag is the only way to keep those kids active.
+        let deprovChip = '';
+        if (s.is_deprov_candidate) {
+            if (s.is_deprov_exempted) {
+                deprovChip = `<span class="issue-tag deprov-exempted" data-action="deprov-untag" data-sid="${s.student_id}" title="Protected from the deprovision sweep — click to remove protection">✓ Protected</span>`;
+            } else {
+                deprovChip = `<span class="issue-tag deprov-candidate" data-action="deprov-tag" data-sid="${s.student_id}" title="Non-district email + no classes → sweep will suspend/archive. Click to protect (kid is in a the district alt program).">Protect from sweep</span>`;
+            }
+        }
+
+        // SIS email — green if matches Google, red if mismatch, muted if empty
+        let sisEmail;
+        if (!s.sis_email) {
+            sisEmail = '<span style="color:var(--text-muted)">&mdash;</span>';
+        } else if (s.emails_match) {
+            sisEmail = `<span class="mono" style="font-size:12px;color:var(--green)">${s.sis_email}</span>`;
+        } else if (s.has_google) {
+            sisEmail = `<span class="mono" style="font-size:12px;color:var(--red)">${s.sis_email}</span>`;
+        } else {
+            sisEmail = `<span class="mono" style="font-size:12px">${s.sis_email}</span>`;
+        }
+
+        // Google email — green if matches SIS, red if mismatch, blue expected if no account
+        let googleEmail;
+        if (s.google_email) {
+            if (s.emails_match) {
+                googleEmail = `<span class="mono" style="font-size:12px;color:var(--green)">${s.google_email}</span>`;
+            } else {
+                googleEmail = `<span class="mono" style="font-size:12px;color:var(--red)">${s.google_email}</span>`;
+            }
+        } else if (s.expected_email) {
+            googleEmail = `<span class="mono" style="font-size:12px;color:var(--accent)">${s.expected_email}</span>`;
+        } else {
+            googleEmail = '<span style="color:var(--text-muted)">&mdash;</span>';
+        }
+
+        const rowClass = s.is_active === false ? 'inactive-row' : '';
+        // Colored badge for change_type when the Changes filter is active.
+        // Reuses the .change-badge classes from the Change Log tab so the
+        // color language is consistent (added=green, removed=red, etc.).
+        const changeBadge = s.recent_change
+          ? `<span class="change-badge badge-${s.recent_change}" style="margin-right:6px">${formatType(s.recent_change)}</span>`
+          : '';
+        return `<tr class="${rowClass}">
+            <td style="font-weight:500">${changeBadge}${s.is_new ? '<span class="new-badge">New</span>' : ''}<a href="#" data-action="open-profile" data-sid="${s.student_id}" style="color:var(--text);text-decoration:none;border-bottom:1px dotted var(--border)">${s.name}</a></td>
+            <td class="mono copyable" style="font-size:12px;cursor:pointer" title="Click to copy" data-action="copy-field">${s.student_id}</td>
+            <td>${s.school ? `<span class="building-badge building-${_bldgCode(s.school)}" title="${_bldgName(s.school)}">${_bldgCode(s.school)}</span>` : '\u2014'}${_ouChip(s.google_ou, s.school)}</td>
+            <td style="text-align:center;font-size:12px">${s.grade}</td>
+            <td class="copyable" style="font-size:12px;cursor:pointer" title="Click to copy" data-action="copy-field">${hr}</td>
+            <td style="text-align:center;white-space:nowrap">${sisIcon}${cleverIcon}</td>
+            <td style="text-align:center">${googleIcon}</td>
+            <td class="copyable" style="cursor:pointer" title="Click to copy" data-action="copy-field">${sisEmail}</td>
+            <td class="copyable" style="cursor:pointer" title="Click to copy" data-action="copy-field">${googleEmail}</td>
+            <td>${absChip}${noClasses}${deprovChip}${issues || (absChip || noClasses || deprovChip ? '' : '<span style="color:var(--text-muted)">&mdash;</span>')}</td>
+        </tr>`;
+    }).join('');
+}
+
+function renderRosterPagination(total) {
+    const from = rosterPage * rosterPageSize + 1;
+    const to = Math.min(from + rosterPageSize - 1, total);
+    document.getElementById('dir-page-info').textContent = total ? `Showing ${from}–${to} of ${total}` : 'No results';
+    document.getElementById('dir-prev').disabled = rosterPage === 0;
+    document.getElementById('dir-next').disabled = to >= total;
+}
+function rosterNextPage() { rosterPage++; loadDirectory(); }
+function rosterPrevPage() { rosterPage = Math.max(0, rosterPage - 1); loadDirectory(); }
+function changeRosterPageSize(val) { rosterPageSize = parseInt(val) || 50; rosterPage = 0; loadDirectory(); }
+
+function debounceSearch() {
+    rosterPage = 0;
+    clearTimeout(_searchTimer);
+    _searchTimer = setTimeout(loadDirectory, 300);
+}
+
+// ── Student profile ──────────────────────────────────────────────────────
+
+async function openProfile(sid) {
+    const overlay = document.getElementById('student-overlay');
+    const content = document.getElementById('sp-content');
+    document.getElementById('sp-name').textContent = 'Loading...';
+    content.innerHTML = '<p style="color:var(--text-muted)">Loading profile...</p>';
+    overlay.classList.add('active');
+    document.body.style.overflow = 'hidden';
+
+    try {
+        // Load the base profile + the attendance history in parallel —
+        // the absence-detail endpoint is small and stays out of the
+        // profile router path.
+        const [data, attendance] = await Promise.all([
+            fetch(`/api/roster/students/${sid}`, {headers: H}).then(r => r.json()),
+            fetch(`/api/roster/students/${sid}/absences?days=365`, {headers: H})
+                .then(r => r.ok ? r.json() : {count: 0, absences: []})
+                .catch(() => ({count: 0, absences: []})),
+        ]);
+        const s = data.student;
+        const g = data.google;
+        const c = data.compliance || {};
+
+        document.getElementById('sp-name').textContent = `${s.first_name} ${s.last_name}`;
+
+        let html = '';
+
+        // Current class banner with countdown
+        if (s.current_class) {
+            const cc = s.current_class;
+            const endParts = cc.end.split(':');
+            const endMins = parseInt(endParts[0]) * 60 + parseInt(endParts[1]);
+            const nowMins = new Date().getHours() * 60 + new Date().getMinutes();
+            const remaining = endMins - nowMins;
+            const remainText = remaining > 0 ? `${remaining} min remaining` : 'Ending now';
+            const courseName = cc.course ? `<strong>${cc.course}</strong> &mdash; ` : '';
+            html += `<div style="background:rgba(63,185,80,0.1);border:1px solid rgba(63,185,80,0.3);border-radius:6px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:12px">
+                <span style="font-size:20px">&#128218;</span>
+                <div style="flex:1">
+                    <div style="font-size:13px;font-weight:600;color:var(--green)">Period ${cc.period} <span id="sp-countdown" style="font-weight:400;font-size:12px;color:var(--text-muted)">&mdash; ${remainText}</span></div>
+                    <div style="font-size:12px;color:var(--text-muted)">${courseName}${cc.teacher} &mdash; ${cc.start}\u2013${cc.end}</div>
+                </div>
+            </div>`;
+            // Live countdown
+            if (remaining > 0) {
+                window._spCountdownEnd = endMins;
+                clearInterval(window._spCountdownInterval);
+                window._spCountdownInterval = setInterval(() => {
+                    const el = document.getElementById('sp-countdown');
+                    if (!el) { clearInterval(window._spCountdownInterval); return; }
+                    const now = new Date().getHours() * 60 + new Date().getMinutes();
+                    const left = window._spCountdownEnd - now;
+                    if (left <= 0) { el.textContent = '— Class ended'; clearInterval(window._spCountdownInterval); }
+                    else { el.textContent = '— ' + left + ' min remaining'; }
+                }, 30000);
+            }
+        }
+
+        // Membership status pill \u2014 SIS-authoritative code (a201).
+        // Shown above the info grid on every profile so operators can
+        // trust the data source (no pill = "we have no membership
+        // record" = a real signal, not "assume active").
+        const m = data.membership;
+        if (m && m.code) {
+            const enrolled = m.effective_enrolled;
+            const bg = enrolled ? 'rgba(63,185,80,0.10)' : 'rgba(210,153,34,0.10)';
+            const border = enrolled ? 'rgba(63,185,80,0.30)' : 'rgba(210,153,34,0.30)';
+            const clr = enrolled ? 'var(--green)' : 'var(--yellow)';
+            const overrideChip = CAN_WRITE
+                ? (m.attends_our_classes_override
+                    ? `<span class="issue-tag" data-action="attends-untag" data-sid="${esc(s.student_id)}" style="cursor:pointer;background:rgba(63,185,80,0.15);color:var(--green)" title="Currently overridden to enrolled \u2014 click to remove override">&check; Attends our classes</span>`
+                    : (!m.code_enrolled
+                        ? `<span class="issue-tag" data-action="attends-tag" data-sid="${esc(s.student_id)}" style="cursor:pointer" title="Mark this student as attending the district classes despite the ${esc(m.code)} code">Mark as attending our classes</span>`
+                        : ''))
+                : '';
+            html += `<div style="background:${bg};border:1px solid ${border};border-radius:6px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+                <div style="flex:1">
+                    <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em">SIS Membership</div>
+                    <div style="font-size:14px;font-weight:600;color:${clr}">${esc(m.label)} <span class="mono" style="font-weight:400;opacity:0.7;font-size:12px">(${esc(m.code)})</span></div>
+                    ${m.district_withdrawal_date ? `<div style="font-size:11px;color:var(--text-muted);margin-top:2px">Withdrew ${esc(m.district_withdrawal_date)}${m.district_withdrawal_reason ? ' &middot; reason ' + esc(m.district_withdrawal_reason) : ''}</div>` : ''}
+                </div>
+                ${overrideChip}
+            </div>`;
+        }
+
+        // Student info
+        html += `<div class="sp-section"><h4>Student Information</h4><div class="sp-grid">
+            <div class="sp-field"><label>Student ID</label><span class="mono">${s.student_id}</span></div>
+            <div class="sp-field"><label>Grade</label><span>${s.grade}</span></div>
+            <div class="sp-field"><label>School</label><span>${s.school_name || s.school}</span></div>
+            <div class="sp-field"><label>Date of Birth</label><span>${s.dob || '\u2014'}</span></div>
+            <div class="sp-field"><label>SIS Email</label><span class="mono">${s.sis_email || '\u2014'}</span></div>
+            <div class="sp-field"><label>Expected Email</label><span class="mono" style="color:var(--accent)">${c.expected || '\u2014'}</span></div>
+            <div class="sp-field"><label>Homeroom</label><span>${s.homeroom || '\u2014'}</span></div>
+            <div class="sp-field"><label>Homeroom Email</label><span class="mono">${s.homeroom_teacher || '\u2014'}</span></div>
+        </div></div>`;
+
+        // Parent/Guardian contacts
+        if (s.parent_guardian || s.phone) {
+            html += `<div class="sp-section"><h4>Parent/Guardian</h4><div class="sp-grid">
+                ${s.parent_guardian ? `<div class="sp-field"><label>Name</label><span>${s.parent_guardian}</span></div>` : ''}
+                ${s.phone ? `<div class="sp-field"><label>Phone</label><span>${s.phone}</span></div>` : ''}
+                ${s.address ? `<div class="sp-field"><label>Address</label><span style="font-size:12px">${s.address}</span></div>` : ''}
+            </div></div>`;
+        }
+
+        // Google account
+        if (g) {
+            const sidBadge = g.has_student_id
+                ? '<span class="sp-badge ok">SID Linked</span>'
+                : '<span class="sp-badge warn">SID Not Linked</span>';
+            const statusBadge = g.suspended
+                ? '<span class="sp-badge miss">Suspended</span>'
+                : '<span class="sp-badge ok">Active</span>';
+            // Password reset only offered when the tech has write perms
+            // AND the account is active (resetting a suspended account
+            // is a no-op — user still can't log in).
+            const resetBtn = (CAN_WRITE && !g.suspended)
+                ? `<button data-action="reset-password" data-sid="${esc(s.student_id)}" data-name="${esc(s.first_name + ' ' + s.last_name)}" data-email="${esc(g.email)}" style="margin-left:auto;padding:4px 10px;font-size:11px;background:var(--accent);color:#0d1117;border:0;border-radius:4px;cursor:pointer;font-weight:600">&#128273; Reset Password</button>`
+                : '';
+            html += `<div class="sp-section"><h4 style="display:flex;align-items:center">Google Workspace ${resetBtn}</h4><div class="sp-grid">
+                <div class="sp-field"><label>Email</label><span class="mono" style="color:var(--green)">${g.email}</span></div>
+                <div class="sp-field"><label>Name in Google</label><span>${g.name}</span></div>
+                <div class="sp-field"><label>OU</label><span style="font-size:12px">${g.ou}</span></div>
+                <div class="sp-field"><label>Status</label><span>${statusBadge} ${sidBadge}</span></div>
+            </div></div>`;
+        } else {
+            html += `<div class="sp-section"><h4>Google Workspace</h4>
+                <span class="sp-badge miss">No Google Account</span></div>`;
+        }
+
+        // Email compliance
+        if (c.reason) {
+            const compLabel = COMPLIANCE_LABELS[c.reason] || c.reason;
+            html += `<div class="sp-section"><h4>Email Compliance</h4>
+                <span class="sp-badge warn">${compLabel}</span>
+                <span style="font-size:12px;color:var(--text-muted);margin-left:8px">Expected: ${c.expected || '?'} / Actual: ${c.actual || '?'}</span>
+            </div>`;
+        }
+
+        // Guidance queue
+        if (data.guidance) {
+            const gBadge = data.guidance.status === 'pending'
+                ? '<span class="sp-badge warn">Pending</span>'
+                : '<span class="sp-badge ok">Scheduled</span>';
+            html += `<div class="sp-section"><h4>Guidance Queue</h4>
+                ${gBadge} <span style="font-size:12px;color:var(--text-muted)">Counselor group: ${data.guidance.counselor}${data.guidance.scheduled_by ? ' \u2014 by ' + data.guidance.scheduled_by : ''}</span>
+            </div>`;
+        }
+
+        // Sections / teachers
+        if ((data.sections || []).length) {
+            const teacherHtml = (data.sections || []).map(sec =>
+                `<tr><td style="font-size:12px">${sec.period || '\u2014'}</td>
+                     <td style="font-size:12px">${sec.course || '\u2014'}</td>
+                     <td style="font-size:12px">${sec.teacher || '\u2014'}</td>
+                     <td class="mono" style="font-size:11px">${sec.email || ''}</td></tr>`
+            ).join('');
+            html += `<div class="sp-section"><h4>Schedule (${(data.sections||[]).length} sections)</h4>
+                <table style="width:100%;border-collapse:collapse">
+                <thead><tr><th style="text-align:left;font-size:11px;color:var(--text-muted);padding:2px 8px 2px 0">Period</th>
+                <th style="text-align:left;font-size:11px;color:var(--text-muted);padding:2px 8px">Course</th>
+                <th style="text-align:left;font-size:11px;color:var(--text-muted);padding:2px 8px">Teacher</th>
+                <th style="text-align:left;font-size:11px;color:var(--text-muted);padding:2px 8px">Email</th></tr></thead>
+                <tbody>${teacherHtml}</tbody></table></div>`;
+        } else {
+            html += `<div class="sp-section"><h4>Enrolled Sections</h4>
+                <span class="sp-badge miss">No sections \u2014 inactive</span></div>`;
+        }
+
+        // Attendance \u2014 last 365 days, most recent first. Shown even
+        // when empty so a clean-attendance kid is obvious.
+        {
+            const rows = attendance.absences || [];
+            const total = attendance.count || 0;
+            const heading = total > 0
+                ? `Attendance <span style="font-weight:normal;color:var(--text-muted);font-size:11px">(${total} absence${total===1?'':'s'} in the last year)</span>`
+                : `Attendance <span style="font-weight:normal;color:var(--green);font-size:11px">(no absences on record)</span>`;
+            const _dfmt = iso => {
+                const d = new Date(iso + 'T12:00:00');
+                return d.toLocaleDateString(undefined, {weekday:'short', month:'short', day:'numeric', year:'numeric'});
+            };
+            const body = rows.length
+              ? `<table style="width:100%;border-collapse:collapse">
+                   <thead><tr>
+                     <th style="text-align:left;font-size:11px;color:var(--text-muted);padding:2px 8px 2px 0">Date</th>
+                     <th style="text-align:left;font-size:11px;color:var(--text-muted);padding:2px 8px">Type</th>
+                     <th style="text-align:left;font-size:11px;color:var(--text-muted);padding:2px 8px">Level</th>
+                     <th style="text-align:left;font-size:11px;color:var(--text-muted);padding:2px 8px">Reason / Note</th>
+                   </tr></thead>
+                   <tbody>${rows.slice(0, 40).map(a => `
+                     <tr>
+                       <td style="font-size:12px">${_dfmt(a.date)}</td>
+                       <td style="font-size:12px">${(a.type_name || a.type || '')}</td>
+                       <td style="font-size:12px">${a.level || '\u2014'}</td>
+                       <td style="font-size:12px;color:var(--text-muted)">${[a.reason, a.note, a.comments].filter(Boolean).join(' \u00b7 ') || '\u2014'}</td>
+                     </tr>`).join('')}
+                   </tbody></table>
+                   ${rows.length > 40 ? `<div style="margin-top:6px;font-size:11px;color:var(--text-muted)">Showing 40 most recent of ${rows.length}</div>` : ''}`
+              : '';
+            html += `<div class="sp-section"><h4>${heading}</h4>${body}</div>`;
+        }
+
+        // Devices — compact, one-line rows
+        if ((data.devices || []).length) {
+            // Same model cleanup the chromebook inventory uses so rows read
+            // consistently across views: strip "Hewlett-Packard"/"Chromebook"
+            // noise and de-duplicate the leading vendor token.
+            const _MAKES = ['Acer','ASUS','CTL','Dell','Google','HP','Lenovo','Samsung','Toshiba'];
+            const parseMake = (s) => {
+                if (!s) return '';
+                const norm = s.replace(/\bHewlett-Packard\b/gi, 'HP');
+                for (const m of _MAKES) {
+                    if (new RegExp('^' + m + '\\b', 'i').test(norm)) return m;
+                }
+                return '';
+            };
+            const shortModel = (s) => {
+                if (!s) return '\u2014';
+                const make = parseMake(s);
+                let r = s
+                    .replace(/\bHewlett-Packard\b/gi, 'HP')
+                    .replace(/\bChromebook\b/gi, '');
+                if (make) r = r.replace(new RegExp('^(' + make + '\\s*)+', 'i'), '');
+                return r.replace(/\s{2,}/g, ' ').trim() || '\u2014';
+            };
+            html += `<div class="sp-section"><h4>Devices</h4><table class="sp-table" style="font-size:11px"><thead><tr><th>Serial</th><th>Model</th><th>Status</th><th>Location</th><th>Last Sync</th></tr></thead><tbody>`;
+            for (const dev of data.devices) {
+                // Location precedence: on-campus AP > off-campus > unknown.
+                // Sub-line (below the main text) holds the "live/last seen"
+                // label for APs or the WAN IP for off-campus.
+                let locColor, locText, locSub;
+                if (dev.ap_name) {
+                    locColor = dev.ap_live ? 'var(--green)' : 'var(--yellow)';
+                    locText = dev.ap_name;
+                    locSub = dev.ap_live ? 'live' : 'last seen';
+                } else if (dev.off_campus) {
+                    locColor = 'var(--yellow)';
+                    locText = 'Off-campus';
+                    locSub = dev.last_wan ? `WAN ${dev.last_wan}` : '';
+                } else {
+                    locColor = 'var(--text-muted)';
+                    locText = '\u2014';
+                    locSub = '';
+                }
+                // Date + time so operators can see when the device last
+                // phoned home — matters for triaging suspected theft or loss.
+                let syncMain = '\u2014', syncSub = '';
+                if (dev.last_sync) {
+                    const d = new Date(dev.last_sync);
+                    syncMain = d.toLocaleDateString('en-US', {month:'numeric', day:'numeric', year:'2-digit'});
+                    syncSub = d.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit', hour12:true});
+                }
+                const statusCls = (dev.status || '').toUpperCase() === 'ACTIVE' ? 'ok' : 'miss';
+                const profUrl = `/chromebook?device=${encodeURIComponent(dev.device_id)}`;
+                html += `<tr>
+                    <td style="font-family:monospace"><a href="${profUrl}" target="_blank" style="color:var(--accent);text-decoration:none" title="Open Chromebook profile">${dev.serial}</a></td>
+                    <td title="${(dev.model||'').replace(/"/g,'&quot;')}">${shortModel(dev.model)}</td>
+                    <td><span class="sp-badge ${statusCls}">${dev.status || '\u2014'}</span></td>
+                    <td style="color:${locColor};white-space:nowrap;line-height:1.3">${locText}${locSub ? `<br><span style="font-size:9px;color:var(--text-muted);font-weight:400">${locSub}</span>` : ''}</td>
+                    <td style="color:var(--text-muted);white-space:nowrap;line-height:1.3">${syncMain}${syncSub ? `<br><span style="font-size:9px">${syncSub}</span>` : ''}</td>
+                </tr>`;
+            }
+            html += `</tbody></table></div>`;
+        }
+
+        // Change history
+        if ((data.changes || []).length) {
+            html += `<div class="sp-section"><h4>Change History</h4><div class="sp-timeline">`;
+            for (const ch of data.changes) {
+                const dt = ch.date ? new Date(ch.date).toLocaleDateString('en-US', {timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, month: 'short', day: 'numeric'}) : '';
+                const badge = formatType(ch.type);
+                html += `<div class="tl-item">
+                    <span class="sp-badge info" style="font-size:10px">${badge}</span>
+                    <span class="tl-date" style="margin-left:6px">${dt}</span>
+                </div>`;
+            }
+            html += `</div></div>`;
+        }
+
+        content.innerHTML = html;
+    } catch(e) {
+        content.innerHTML = `<p style="color:var(--red)">Error loading profile: ${e.message}</p>`;
+    }
+}
+
+function closeProfile() {
+    document.getElementById('student-overlay').classList.remove('active');
+    document.body.style.overflow = '';
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeProfile(); });
+
+// ── Change Log tab ───────────────────────────────────────────────────────
+
+async function exportSISEmail() {
+    if (!_dirData) { alert('No data loaded'); return; }
+    // Refetch the entire filtered set (not just the currently-visible
+    // page). The screen shows one page at a time via limit/offset; the
+    // export needs everything the filter matches, so we page through
+    // to the end.
+    //
+    // Prefer the verified Google email when the account already exists;
+    // fall back to the district-convention `expected_email` so new
+    // enrollees (not yet provisioned in Google) still make it into
+    // the SIS update.
+    const btn = document.getElementById('btn-export-sis-email');
+    const originalLabel = btn ? btn.innerHTML : null;
+    if (btn) { btn.disabled = true; btn.innerHTML = 'Exporting…'; }
+
+    try {
+        // Rebuild the same filter params loadDirectory() uses.
+        const school = document.getElementById('dir-school').value;
+        const issue = document.getElementById('dir-issue').value;
+        const search = document.getElementById('dir-search').value.trim();
+        const showInactive = document.getElementById('dir-inactive').checked;
+        const showUnenrolled = document.getElementById('dir-unenrolled')?.checked;
+        const daysEl = document.getElementById('dir-days');
+        const dayRangeFilter = (issue === 'changes' || issue === 'new');
+
+        const PAGE = 200; // API max limit
+        let offset = 0;
+        const rows = [];
+        // Safety cap in case the API ever returns a stuck response
+        for (let guard = 0; guard < 200; guard++) {
+            const params = new URLSearchParams({
+                limit: String(PAGE), offset: String(offset),
+            });
+            if (school !== 'ALL') params.set('school', school);
+            if (issue) params.set('issue', issue);
+            if (search) params.set('search', search);
+            if (showInactive) params.set('status', '');
+            params.set('show_unenrolled', showUnenrolled ? 'true' : 'false');
+            if (dayRangeFilter) params.set('days', daysEl.value);
+
+            const data = await fetch('/api/roster/students?' + params, {headers: H}).then(r => r.json());
+            const students = data.students || [];
+            for (const s of students) {
+                if (s.student_id && (s.google_email || s.expected_email)) {
+                    rows.push(`${s.student_id},${s.google_email || s.expected_email}`);
+                }
+            }
+            if (students.length < PAGE) break;
+            offset += PAGE;
+        }
+
+        if (!rows.length) {
+            alert('No students with an email (verified or expected) to export');
+            return;
+        }
+        const blob = new Blob([rows.join('\n')], {type: 'text/csv'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'sis_email_export.csv';
+        a.click();
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = originalLabel; }
+    }
+}
+
+function exportNutrikids() {
+    const days = document.getElementById('filter-days').value;
+    window.location.href = `/api/roster/nutrikids-export?days=${days}`;
+}
+
+function exportNutrikidsFull() {
+    if (!confirm(
+        'Full NutriKids export — every active student in the district.\n\n' +
+        'This is the start-of-year initial upload. For weekly incremental ' +
+        'uploads use the Changes tab\'s Nutrikids CSV button instead.\n\n' +
+        'Continue?'
+    )) return;
+    window.location.href = '/api/roster/nutrikids-export?full=1';
+}
+
+async function loadChanges() {
+    const school = document.getElementById('filter-school').value;
+    const type   = document.getElementById('filter-type').value;
+    const days   = document.getElementById('filter-days').value;
+    const params = new URLSearchParams({ days });
+    if (school !== 'ALL') params.set('school', school);
+    if (type) params.set('change_type', type);
+
+    const tbody = document.getElementById('changes-body');
+    try {
+        let data = await fetch('/api/roster/changes?' + params, {headers: H}).then(r => r.json());
+        setTabCount('changes', data.length);
+        if (!data.length) { tbody.innerHTML = '<tr><td colspan="8" class="empty-row">No changes found</td></tr>'; return; }
+
+        const rows = [];
+        let lastDate = null;
+        for (const c of data) {
+            const rowDate = c.created_at ? new Date(c.created_at).toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric', year:'numeric'}) : '&mdash;';
+            if (rowDate !== lastDate) {
+                rows.push(`<tr><td colspan="8" style="padding:8px 12px 2px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;background:var(--bg);border-bottom:none">${rowDate}</td></tr>`);
+                lastDate = rowDate;
+            }
+            const hr = c.homeroom ? `<span title="${c.homeroom.email}" style="font-size:12px">${c.homeroom.name}</span>` : '<span style="color:var(--text-muted)">&mdash;</span>';
+            rows.push(`<tr>
+                <td class="mono" style="font-size:11px;color:var(--text-muted);white-space:nowrap">${rowDate}</td>
+                <td style="font-weight:500">${c.student_name || '&mdash;'}</td>
+                <td class="mono" style="font-size:12px;color:var(--text-muted)">${c.email || '&mdash;'}</td>
+                <td class="mono" style="font-size:12px">${c.student_id || '&mdash;'}</td>
+                <td style="font-size:12px;color:var(--text-muted)">${c.building || '&mdash;'}</td>
+                <td style="text-align:center;font-size:12px">${c.grade || '&mdash;'}</td>
+                <td>${hr}</td>
+                <td><span class="change-badge badge-${c.change_type}">${formatType(c.change_type)}</span></td>
+            </tr>`);
+        }
+        tbody.innerHTML = rows.join('');
+    } catch(e) { tbody.innerHTML = '<tr><td colspan="8" class="empty-row">Error loading changes</td></tr>'; }
+}
+
+// ── Google Audit tab ─────────────────────────────────────────────────────
+
+const ACTION_LABELS = {
+    create_account:    'Account Created',
+    rename_account:    'Email Renamed',
+    set_student_id:    'Student ID Set',
+    reactivate_account:'Reactivated',
+    suspend_account:   'Suspended',
+};
+
+function formatGoogleChange(c) {
+    const b = c.before_state, a = c.after_state;
+    if (c.action === 'rename_account')
+        return `<span class="mono" style="color:var(--red);font-size:12px">${b.email||'?'}</span> &rarr; <span class="mono" style="color:var(--green);font-size:12px">${a.email||'?'}</span>`;
+    if (c.action === 'set_student_id')
+        return `ID: <span class="mono" style="font-size:12px">${b.student_id||'none'}</span> &rarr; <span class="mono" style="color:var(--green);font-size:12px">${a.student_id||'?'}</span>`;
+    if (c.action === 'create_account')
+        return `<span style="color:var(--green)">New account provisioned</span>${a.student_id ? ' &middot; ID: <span class="mono" style="font-size:12px">'+a.student_id+'</span>' : ''}`;
+    if (c.action === 'reactivate_account') return '<span style="color:var(--green)">Suspended &rarr; Active</span>';
+    if (c.action === 'suspend_account')    return '<span style="color:var(--red)">Active &rarr; Suspended</span>';
+    return '&mdash;';
+}
+
+async function loadGoogleAudit() {
+    const days   = document.getElementById('gaudit-days').value;
+    const action = document.getElementById('gaudit-action').value;
+    const tbody  = document.getElementById('gaudit-body');
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-row">Loading...</td></tr>';
+    try {
+        const params = new URLSearchParams({ days });
+        if (action) params.set('action', action);
+        const data = await fetch('/api/roster/google-changelog?' + params, {headers: H}).then(r => r.json());
+        if (!data.length) {
+            tbody.innerHTML = '<tr><td colspan="7" class="empty-row">No Google changes in this period</td></tr>'; return;
+        }
+        tbody.innerHTML = data.map(c => {
+            const dt = new Date(c.changed_at).toLocaleString();
+            const actor = c.actor === 'system' ? '<span style="color:var(--text-muted)">scheduler</span>' : c.actor.split('@')[0];
+            const label = ACTION_LABELS[c.action] || c.action;
+            let statusCell, revertBtn = '';
+            if (c.reverted) {
+                const by = c.reverted_by ? c.reverted_by.split('@')[0] : '?';
+                const at = c.reverted_at ? new Date(c.reverted_at).toLocaleDateString() : '';
+                statusCell = `<span style="color:var(--text-muted)">Reverted ${at} by ${by}</span>`;
+            } else {
+                statusCell = '<span style="color:var(--green)">Active</span>';
+                if (CAN_WRITE) {
+                    revertBtn = `<button class="btn" style="font-size:11px" data-action="revert-to-point" data-changed-at="${esc(c.changed_at)}" data-change-id="${c.id}">Revert to here</button>`;
+                }
+            }
+            return `<tr>
+                <td class="mono" style="font-size:12px;color:var(--text-muted)">${dt}</td>
+                <td style="font-size:12px">${actor}</td>
+                <td><span style="font-size:12px;font-weight:500">${label}</span></td>
+                <td class="mono" style="font-size:12px">${c.target_email}</td>
+                <td style="font-size:12px">${formatGoogleChange(c)}</td>
+                <td style="font-size:12px">${statusCell}</td>
+                <td>${revertBtn}</td>
+            </tr>`;
+        }).join('');
+    } catch(e) { document.getElementById('gaudit-body').innerHTML = '<tr><td colspan="7" class="empty-row">Error loading audit log</td></tr>'; }
+}
+
+// ── Actions ──────────────────────────────────────────────────────────────
+
+async function runImport() {
+    const status = document.getElementById('import-status');
+    status.style.color = 'var(--text-muted)';
+    status.textContent = 'Running import...';
+    try {
+        const resp = await fetch('/api/roster/import', { method: 'POST', headers: HJ, body: JSON.stringify({source: 'clever'}) });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.detail || 'Import failed');
+        status.textContent = '\u2713 Done \u2014 ' + data.snapshots + ' file(s), ' + data.changes + ' change(s)';
+        loadDirectory();
+    } catch(e) {
+        status.style.color = 'var(--red)';
+        status.textContent = '\u2717 ' + e.message;
+    }
+}
+
+async function uploadCleverCSV(input) {
+    if (!input.files?.length) return;
+    const status = document.getElementById('import-status');
+    status.style.color = 'var(--text-muted)';
+    status.textContent = `Uploading ${input.files.length} file(s)...`;
+    try {
+        const formData = new FormData();
+        for (const f of input.files) {
+            formData.append(f.name, f);
+        }
+        const resp = await fetch('/api/roster/upload-csv', {
+            method: 'POST',
+            headers: {'X-Requested-With': 'CommandNexus'},
+            body: formData,
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.detail || 'Upload failed');
+        let msg = `\u2713 ${data.processed} file(s) processed`;
+        if (data.teachers) msg += `, ${data.teachers} teachers`;
+        if (data.enrollments) msg += `, ${data.enrollments} enrollments`;
+        if (data.sections) msg += `, ${data.sections} sections`;
+        if (data.errors?.length) msg += ` (${data.errors.length} error(s))`;
+        status.textContent = msg;
+        status.style.color = data.errors?.length ? 'var(--yellow)' : 'var(--green)';
+        input.value = '';
+        loadDirectory();
+    } catch(e) {
+        status.style.color = 'var(--red)';
+        status.textContent = '\u2717 ' + e.message;
+        input.value = '';
+    }
+}
+
+async function recheckGoogle() {
+    const status = document.getElementById('import-status');
+    status.style.color = 'var(--text-muted)';
+    status.textContent = 'Rechecking Google accounts...';
+    try {
+        const resp = await fetch('/api/roster/recheck-google', { method: 'POST', headers: HJ });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.detail || 'Recheck failed');
+        status.textContent = '\u2713 Fixed ' + data.fixed + ' of ' + data.total_checked + ' records';
+        loadDirectory();
+    } catch(e) {
+        status.style.color = 'var(--red)';
+        status.textContent = '\u2717 ' + e.message;
+    }
+}
+
+let _backfillPollTimer = null;
+async function runBackfill() {
+    const since = prompt(
+        'Backfill Google accounts for students missing one.\n\n' +
+        'Only include students enrolled/added on or after (YYYY-MM-DD, leave blank for all):',
+        '2026-07-01',
+    );
+    if (since === null) return;
+
+    // Preview count first via dry-run (runs inline \u2014 instant).
+    const status = document.getElementById('import-status');
+    status.style.color = 'var(--text-muted)';
+    status.textContent = 'Counting candidates...';
+    let candidates = 0;
+    let preview = [];
+    try {
+        const previewResp = await fetch('/api/roster/backfill-google', {
+            method: 'POST', headers: HJ,
+            body: JSON.stringify({since_date: since.trim() || null, dry_run: true}),
+        });
+        const previewData = await previewResp.json();
+        if (!previewResp.ok) throw new Error(previewData.detail || 'preview failed');
+        candidates = previewData.candidates || 0;
+        preview = previewData.preview || [];
+    } catch(e) {
+        status.style.color = 'var(--red)';
+        status.textContent = '\u2717 ' + e.message;
+        return;
+    }
+    if (!candidates) {
+        status.textContent = '\u2713 No candidates match \u2014 nothing to backfill.';
+        return;
+    }
+    // Show a sample of names in the confirm so operator can sanity-check.
+    const sample = preview.slice(0, 5).map(p => `  ${p.name} (${p.school}, grade ${p.grade})`).join('\n');
+    const more = candidates > 5 ? `\n  ... and ${candidates - 5} more` : '';
+    if (!confirm(
+        `${candidates} student(s) need Google accounts. Sample:\n\n${sample}${more}\n\n` +
+        `Provision now? (~${Math.ceil(candidates * 1.5)}s at 1-2 sec/student.)`
+    )) {
+        status.textContent = 'Backfill cancelled.';
+        return;
+    }
+
+    // Second prompt — trust-exact-name-match opt-in. This handles the
+    // "existing Google account with no SID stamped" case (typically
+    // pre-Nexus-provisioned accounts) by auto-linking when the SIS
+    // name matches Google's name exactly. Off by default so wrong-
+    // linking a different-person-same-name never happens by accident.
+    const trustNames = confirm(
+        `Trust exact name matches for pre-Nexus accounts?\n\n` +
+        `YES → when a Google account already exists at the expected email with the SAME name but no SIS ID, ` +
+        `Nexus auto-links it (stamps SID, unsuspends, moves to correct OU) instead of flagging for review.\n\n` +
+        `NO → those cases stay flagged for you to review by hand.\n\n` +
+        `Pick YES if you're catching up on students who had Google accounts before Nexus was managing them.`
+    );
+
+    status.textContent = `Backfilling ${candidates} accounts${trustNames ? ' (trusting name matches)' : ''}...`;
+    try {
+        const resp = await fetch('/api/roster/backfill-google', {
+            method: 'POST', headers: HJ,
+            body: JSON.stringify({
+                since_date: since.trim() || null,
+                dry_run: false,
+                trust_name_match: trustNames,
+            }),
+        });
+        if (!resp.ok) {
+            const b = await resp.json().catch(() => ({}));
+            throw new Error(b.detail || 'backfill failed');
+        }
+    } catch(e) {
+        status.style.color = 'var(--red)';
+        status.textContent = '\u2717 ' + e.message;
+        return;
+    }
+
+    // Poll progress every 3s until state=complete
+    if (_backfillPollTimer) clearInterval(_backfillPollTimer);
+    _backfillPollTimer = setInterval(async () => {
+        try {
+            const p = await fetch('/api/roster/backfill-google/progress', {headers: HJ}).then(r => r.json());
+            const line = `Backfill: ${p.processed || 0}/${p.candidates || '?'} \u2014 ` +
+                `${p.provisioned || 0} created, ${p.reactivated || 0} reactivated, ` +
+                `${p.flagged || 0} flagged, ${p.errors || 0} errors`;
+            status.textContent = line;
+            if (p.state === 'complete') {
+                clearInterval(_backfillPollTimer);
+                status.style.color = (p.errors || 0) > 0 ? 'var(--yellow, orange)' : 'var(--green)';
+                status.textContent = '\u2713 ' + line;
+                loadDirectory();
+            }
+        } catch(e) {
+            // keep polling \u2014 transient error
+        }
+    }, 3000);
+}
+
+async function revertToPoint(changedAt, changeId) {
+    const dt = new Date(changedAt).toLocaleString();
+    if (!confirm('Revert all Google Workspace changes made AFTER:\n' + dt + '\n\nThis will undo account creations (suspend), renames (rename back), and student ID changes. Continue?')) return;
+    const status = document.getElementById('import-status');
+    status.style.color = 'var(--text-muted)';
+    status.textContent = 'Reverting...';
+    try {
+        const resp = await fetch('/api/roster/google-revert', {
+            method: 'POST',
+            headers: HJ,
+            body: JSON.stringify({ revert_to: changedAt }),
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.detail || 'Revert failed');
+        let msg = '\u2713 Reverted ' + data.reverted + ' change(s)';
+        if (data.skipped) msg += ', ' + data.skipped + ' skipped';
+        if (data.errors && data.errors.length) msg += ' \u00b7 ' + data.errors.length + ' error(s): ' + data.errors[0];
+        status.style.color = (data.errors && data.errors.length) ? 'var(--yellow)' : 'var(--green)';
+        status.textContent = msg;
+        loadGoogleAudit();
+    } catch(e) {
+        status.style.color = 'var(--red)';
+        status.textContent = '\u2717 ' + e.message;
+    }
+}
+
+// ── Tab switching ────────────────────────────────────────────────────────
+
+function switchTab(name, btn) {
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    btn.classList.add('active');
+    if (name === 'directory') loadDirectory();
+    else if (name === 'changes') loadChanges();
+    else if (name === 'gaudit') loadGoogleAudit();
+    else if (name === 'guidance') loadGuidanceQueue();
+}
+
+function formatType(t) {
+    const m = { added:'New', removed:'Withdrawn', transferred:'Transfer',
+                grade_change:'Grade \u2191', name_change:'Name', email_noncompliant:'Email Issue',
+                missing_email:'No Email', modified:'Changed' };
+    return m[t] || t;
+}
+
+// ── Confirm student ID match ─────────────────────────────────────────────
+
+async function confirmIdMatch(studentId, googleEmail, sisName, googleName) {
+    if (!confirm(`Confirm student ID link?\n\nSIS Name: ${sisName}\nGoogle Name: ${googleName}\nGoogle Email: ${googleEmail}\nStudent ID: ${studentId}\n\nThis will write the student ID into the Google account.`)) return;
+    const status = document.getElementById('import-status');
+    status.style.color = 'var(--text-muted)';
+    status.textContent = 'Linking student ID...';
+    try {
+        const resp = await fetch('/api/roster/confirm-student-id', {
+            method: 'POST',
+            headers: HJ,
+            body: JSON.stringify({student_id: studentId, google_email: googleEmail}),
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.detail || 'Failed');
+        status.style.color = 'var(--green)';
+        status.textContent = '\u2713 Linked ' + studentId + ' \u2192 ' + googleEmail;
+        loadDirectory();
+    } catch(e) {
+        status.style.color = 'var(--red)';
+        status.textContent = '\u2717 ' + e.message;
+    }
+}
+
+// ── Guidance Queue tab ────────────────────────────────────────────────────
+
+const GQ_STATUS_CSS = {
+    pending: 'background:rgba(210,153,34,0.15);color:var(--yellow)',
+    scheduled: 'background:rgba(63,185,80,0.15);color:var(--green)',
+    cancelled: 'background:rgba(125,133,144,0.15);color:var(--text-muted)',
+};
+
+let _gqCategory = 'enrollment';  // default view — most-actionable
+
+function setGqCategory(cat) {
+    _gqCategory = cat;
+    // Repaint the sub-nav button states
+    document.querySelectorAll('.gq-cat-btn').forEach(b => {
+        const active = (b.dataset.cat || '') === cat;
+        b.classList.toggle('active', active);
+        b.style.background = active ? 'var(--surface2)' : 'transparent';
+        b.style.color = active ? 'var(--text)' : 'var(--text-muted)';
+    });
+    loadGuidanceQueue();
+}
+
+async function loadGuidanceQueue() {
+    const school = document.getElementById('gq-school').value;
+    const status = document.getElementById('gq-status').value;
+    const params = new URLSearchParams();
+    if (school !== 'ALL') params.set('school', school);
+    if (status) params.set('status', status);
+    if (_gqCategory) params.set('category', _gqCategory);
+
+    const tbody = document.getElementById('guidance-body');
+    tbody.innerHTML = '<tr><td colspan="9" class="empty-row">Loading...</td></tr>';
+    try {
+        const data = await fetch('/api/roster/guidance/queue?' + params, {headers: H}).then(r => r.json());
+        setTabCount('guidance', data.pending_count || 0);
+        // Per-category badge counts for the sub-nav
+        const cats = data.counts_by_category || {};
+        for (const c of ['enrollment', 'transfer', 'withdrawal']) {
+            const el = document.getElementById('gq-cnt-' + c);
+            if (el) el.textContent = cats[c] != null ? `(${cats[c]})` : '(0)';
+        }
+        const entries = data.entries || [];
+        if (!entries.length) {
+            tbody.innerHTML = '<tr><td colspan="9" class="empty-row">No entries found</td></tr>';
+            return;
+        }
+        tbody.innerHTML = entries.map(e => {
+            const statusStyle = GQ_STATUS_CSS[e.status] || '';
+            const statusBadge = `<span class="change-badge" style="${statusStyle};text-transform:capitalize">${e.status}</span>`;
+            const added = e.created_at ? new Date(e.created_at).toLocaleDateString() : '\u2014';
+
+            // Category badge — withdrawals are FYI ("acknowledge me"), not work
+            // items. Color them distinctly so guidance doesn't think they need
+            // a class schedule.
+            const isWithdrawal = e.category === 'withdrawal';
+            const catBadge = isWithdrawal
+              ? `<span class="change-badge badge-removed" style="margin-right:6px">Withdrawn</span>`
+              : `<span class="change-badge badge-added" style="margin-right:6px">Enrollment</span>`;
+
+            // Membership status pill — SIS-authoritative code, shown
+            // for every kid so counselors have consistent context
+            // (no pill = we have no SIS membership record for them yet).
+            let msBadge = '';
+            if (e.membership_code) {
+                const bg = e.membership_enrolled ? 'rgba(63,185,80,0.15)' : 'rgba(210,153,34,0.15)';
+                const clr = e.membership_enrolled ? 'var(--green)' : 'var(--yellow)';
+                const lbl = esc(e.membership_label || e.membership_code);
+                msBadge = `<span class="change-badge" style="background:${bg};color:${clr};margin-right:6px" title="SIS membership: ${lbl}">${esc(e.membership_code)}</span>`;
+            }
+
+            let actions = '';
+            if (e.status === 'pending' && CAN_WRITE) {
+                const actionLabel = isWithdrawal ? 'Acknowledge' : 'Scheduled';
+                actions = `<button class="btn" style="font-size:12px" data-action="mark-scheduled" data-id="${e.id}">${actionLabel}</button>`;
+                // "No schedule needed" — only makes sense for enrollment
+                // rows where the SIS membership code says the kid isn't
+                // enrolled (A/E-ish). Explicit disposition so we don't
+                // conflate it with generic "Cancel."
+                if (!isWithdrawal && e.membership_code && e.membership_code !== 'A' && !e.membership_enrolled) {
+                    actions += ` <button class="btn" style="font-size:11px" data-action="no-schedule-needed" data-id="${e.id}" title="This kid is A/E-ish per SIS — no the district schedule needed">No schedule needed</button>`;
+                }
+                actions += ` <button class="btn" style="font-size:11px;color:var(--text-muted)" data-action="cancel-guidance" data-id="${e.id}">Cancel</button>`;
+            }
+            if (e.status === 'scheduled' && e.scheduled_by) {
+                const by = e.scheduled_by === 'system' ? 'auto' : e.scheduled_by.split('@')[0];
+                actions = `<span style="font-size:11px;color:var(--text-muted)">${by}</span>`;
+            }
+            return `<tr>
+                <td style="font-weight:500">${catBadge}${msBadge}${e.student_name}</td>
+                <td class="mono" style="font-size:12px">${e.student_id}</td>
+                <td style="text-align:center;font-size:12px">${e.grade}</td>
+                <td style="font-size:12px;color:var(--text-muted)">${e.school_name}</td>
+                <td style="font-size:12px">${e.counselor_name}</td>
+                <td class="mono" style="font-size:12px">${e.google_email || '\u2014'}</td>
+                <td>${statusBadge}</td>
+                <td class="mono" style="font-size:12px;color:var(--text-muted)">${added}</td>
+                <td style="white-space:nowrap">${actions}
+                  <button class="btn" style="font-size:11px;padding:2px 6px" data-action="toggle-notes" data-id="${e.id}">Notes</button>
+                </td>
+            </tr>
+            <tr id="notes-row-${e.id}" style="display:none">
+              <td colspan="9" style="background:var(--bg);padding:10px 16px">
+                <div id="notes-list-${e.id}" style="margin-bottom:8px;font-size:12px"></div>
+                <div style="display:flex;gap:6px">
+                  <input type="text" id="note-input-${e.id}" placeholder="Add a note..." style="flex:1;padding:5px 8px;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:4px;font-size:12px"
+                    data-action="note-input-key" data-id="${e.id}">
+                  <button class="btn" style="font-size:11px;padding:4px 10px" data-action="add-note" data-id="${e.id}">Add</button>
+                </div>
+              </td>
+            </tr>`;
+        }).join('');
+    } catch(e) {
+        console.error(e);
+        tbody.innerHTML = '<tr><td colspan="9" class="empty-row">Error loading guidance queue</td></tr>';
+    }
+}
+
+async function toggleNotes(id, btn) {
+    const row = document.getElementById('notes-row-' + id);
+    if (row.style.display === 'none') {
+        row.style.display = '';
+        await loadNotes(id);
+    } else {
+        row.style.display = 'none';
+    }
+}
+
+async function loadNotes(id) {
+    const container = document.getElementById('notes-list-' + id);
+    try {
+        const data = await fetch(`/api/roster/guidance/queue/${id}/notes`, {headers: H}).then(r => r.json());
+        const notes = data.notes || [];
+        if (!notes.length) {
+            container.innerHTML = '<div style="color:var(--text-muted);font-size:11px;margin-bottom:4px">No notes yet</div>';
+            return;
+        }
+        container.innerHTML = notes.map(n => {
+            const dt = n.date ? new Date(n.date).toLocaleString('en-US', {month:'short', day:'numeric', hour:'numeric', minute:'2-digit', hour12:true}) : '';
+            const author = n.author.split('@')[0];
+            return `<div style="padding:4px 0;border-bottom:1px solid var(--border)">
+                <span style="color:var(--accent);font-weight:500">${author}</span>
+                <span style="color:var(--text-muted);font-size:10px;margin-left:6px">${dt}</span>
+                <div style="margin-top:2px">${n.note}</div>
+            </div>`;
+        }).join('');
+    } catch(e) { container.innerHTML = '<div style="color:var(--danger)">Error loading notes</div>'; }
+}
+
+async function addNote(id) {
+    const input = document.getElementById('note-input-' + id);
+    const note = input.value.trim();
+    if (!note) return;
+    try {
+        const resp = await fetch(`/api/roster/guidance/queue/${id}/notes`, {
+            method: 'POST', headers: HJ, body: JSON.stringify({note}),
+        });
+        if (resp.ok) { input.value = ''; await loadNotes(id); }
+        else { alert('Failed to add note'); }
+    } catch(e) { alert('Error: ' + e); }
+}
+
+async function markScheduled(id) {
+    try {
+        const resp = await fetch(`/api/roster/guidance/queue/${id}/schedule`, {method: 'POST', headers: HJ});
+        if (!resp.ok) throw new Error((await resp.json()).detail);
+        loadGuidanceQueue();
+    } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function cancelGuidance(id) {
+    if (!confirm('Cancel this guidance queue entry?')) return;
+    try {
+        const resp = await fetch(`/api/roster/guidance/queue/${id}/cancel`, {method: 'POST', headers: HJ});
+        if (!resp.ok) throw new Error((await resp.json()).detail);
+        loadGuidanceQueue();
+    } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function noScheduleNeeded(id) {
+    if (!confirm('Move this entry to "no schedule needed"?')) return;
+    try {
+        const resp = await fetch(`/api/roster/guidance/queue/${id}/no-schedule-needed`, {method: 'POST', headers: HJ});
+        if (!resp.ok) throw new Error((await resp.json()).detail);
+        loadGuidanceQueue();
+    } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function autoResolveGuidance() {
+    const status = document.getElementById('import-status');
+    status.style.color = 'var(--text-muted)';
+    status.textContent = 'Auto-resolving guidance queue...';
+    try {
+        const resp = await fetch('/api/roster/guidance/queue/auto-resolve', {method: 'POST', headers: HJ});
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.detail);
+        status.textContent = '\u2713 Resolved ' + data.resolved + ' entries';
+        loadGuidanceQueue();
+    } catch(e) {
+        status.style.color = 'var(--red)';
+        status.textContent = '\u2717 ' + e.message;
+    }
+}
+
+// Manual admin trigger — runs the auto-queue scan on demand instead
+// of waiting for the scheduler. Queue insertion is always on; this
+// just forces a pass. Scoped to recent enrollments/withdrawals (past
+// N days, default 3) via guidance.auto_queue_recent_days. Counselor
+// emails from this scan are gated by guidance.notify_enabled.
+async function runGuidanceAutoScan() {
+    const btn = document.getElementById('btn-scan-enrollments');
+    const status = document.getElementById('import-status');
+    const origLabel = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Scanning...';
+    status.style.color = 'var(--text-muted)';
+    status.textContent = 'Scanning recent enrollments and withdrawals...';
+    try {
+        const resp = await fetch('/api/roster/guidance/queue/run-auto-scan', {method: 'POST', headers: HJ});
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.detail || 'Scan failed');
+        const enrolled = (data.enrollments && data.enrollments.queued) || 0;
+        const withdrawn = (data.withdrawals && data.withdrawals.queued) || 0;
+        const resolved = data.auto_resolved || 0;
+        const days = (data.enrollments && data.enrollments.recent_days) || 3;
+        const bits = [];
+        if (enrolled) bits.push(`+${enrolled} enrollee${enrolled === 1 ? '' : 's'}`);
+        if (withdrawn) bits.push(`+${withdrawn} withdrawal${withdrawn === 1 ? '' : 's'}`);
+        if (resolved) bits.push(`${resolved} resolved`);
+        if (!bits.length) bits.push(`no new activity in the past ${days} days`);
+        status.style.color = 'var(--green)';
+        status.textContent = '\u2713 ' + bits.join(' · ');
+        loadGuidanceQueue();
+    } catch(e) {
+        status.style.color = 'var(--red)';
+        status.textContent = '\u2717 ' + e.message;
+    } finally {
+        btn.disabled = false;
+        btn.textContent = origLabel;
+    }
+}
+
+// ── Populate school dropdowns from data ──────────────────────────────────
+let _BUILDINGS = [];
+let _SIS_MAP = {};
+
+function _bldgCode(sisCode) {
+    // Translate SIS code (SIS_A) to internal code (PES) via building map
+    return _SIS_MAP[sisCode] || sisCode;
+}
+function _bldgName(sisCode) {
+    const code = _bldgCode(sisCode);
+    const b = _BUILDINGS.find(b => b.code === code);
+    return b ? b.name : code;
+}
+// Turn a Google OU path into a short label + classification vs the
+// student's SIS building code. "match" = OU aligns with their SIS
+// school, "mismatch" = student is in a different school's OU (e.g.
+// EPE kid parked in PHS), "archive" = /Archived Accounts variant,
+// "unknown" = not yet cached / null.
+function _ouChip(ouPath, sisSchoolCode) {
+    if (!ouPath) return `<span class="ou-chip unknown" title="Google OU not yet cached">?</span>`;
+    // Archive first — most useful "at a glance" signal
+    if (/^\/Archived Accounts/i.test(ouPath)) {
+        return `<span class="ou-chip archive" title="${ouPath}">Archive</span>`;
+    }
+    // Extract the tail segment for the label
+    const tail = ouPath.replace(/\/$/, '').split('/').pop() || ouPath;
+    // Best-effort map tail → building short code by matching known buildings
+    const expected = _bldgCode(sisSchoolCode);
+    let label = tail;
+    let kind = 'match';
+    // Try to match tail against known building names for short label
+    const bldg = _BUILDINGS.find(b => tail.toLowerCase() === (b.name || '').toLowerCase());
+    if (bldg) {
+        label = bldg.code;
+        kind = (bldg.code === expected) ? 'match' : 'mismatch';
+    } else {
+        // Unknown OU shape — show first 12 chars, treat as mismatch
+        label = tail.length > 14 ? tail.slice(0, 12) + '…' : tail;
+        kind = 'mismatch';
+    }
+    return `<span class="ou-chip ${kind}" title="${ouPath}">${esc(label)}</span>`;
+}
+
+async function loadSchools() {
+    // Load buildings for badge colors
+    try {
+        const bdata = await fetch('/api/buildings').then(r => r.json());
+        _BUILDINGS = bdata.buildings || [];
+        _SIS_MAP = bdata.sis_map || {};
+        // Inject dynamic badge CSS
+        const style = document.createElement('style');
+        style.textContent = _BUILDINGS.map(b =>
+            `.building-badge.building-${b.code} { background: ${b.color}20; color: ${b.color}; }`
+        ).join('\n');
+        document.head.appendChild(style);
+    } catch(e) {}
+
+    try {
+        const data = await fetch('/api/roster/schools', {headers: H}).then(r => r.json());
+        const selects = ['dir-school', 'filter-school', 'gq-school'];
+        for (const id of selects) {
+            const sel = document.getElementById(id);
+            if (!sel) continue;
+            for (const s of data.schools || []) {
+                const opt = document.createElement('option');
+                opt.value = s.code || s;
+                opt.textContent = s.name || s.code || s;
+                sel.appendChild(opt);
+            }
+        }
+    } catch(e) { console.error('Failed to load schools:', e); }
+    // Load SIS import URL from settings
+    try {
+        const cfg = await fetch('/api/roster/config', {headers: H}).then(r => r.json());
+        if (cfg.sis_import_url) {
+            const link = document.getElementById('sis-import-link');
+            if (link) { link.href = cfg.sis_import_url; link.style.display = ''; }
+        }
+    } catch(e) {}
+}
+
+// ── Event wiring (CSP disallows inline handlers) ─────────────────────────
+// Static-element direct bindings.
+(function wireStatic() {
+    const on = (id, ev, fn) => { const el = document.getElementById(id); if (el) el.addEventListener(ev, fn); };
+    on('btn-import', 'click', runImport);
+    on('btn-upload', 'click', () => document.getElementById('csv-upload-input').click());
+    on('csv-upload-input', 'change', (e) => uploadCleverCSV(e.currentTarget));
+    on('btn-recheck', 'click', recheckGoogle);
+    on('btn-backfill', 'click', runBackfill);
+    on('btn-export-sis-email', 'click', exportSISEmail);
+    on('btn-export-nutrikids', 'click', exportNutrikids);
+    on('btn-export-nutrikids-full', 'click', exportNutrikidsFull);
+    on('btn-auto-resolve', 'click', autoResolveGuidance);
+    on('btn-scan-enrollments', 'click', runGuidanceAutoScan);
+    on('dir-search', 'input', debounceSearch);
+    on('dir-page-size', 'change', (e) => changeRosterPageSize(e.currentTarget.value));
+    on('dir-prev', 'click', rosterPrevPage);
+    on('dir-next', 'click', rosterNextPage);
+})();
+
+// Delegated click — handles tab buttons, dynamically-rendered row
+// actions, and modal-background clicks.
+document.body.addEventListener('click', (e) => {
+    const el = e.target.closest('[data-action]');
+    if (!el) return;
+    switch (el.dataset.action) {
+        case 'switch-tab':
+            switchTab(el.dataset.tab, el);
+            break;
+        case 'copy-field':
+            copyField(el);
+            break;
+        case 'open-profile':
+            e.preventDefault();
+            openProfile(el.dataset.sid);
+            break;
+        case 'close-profile':
+            closeProfile();
+            break;
+        case 'close-profile-bg':
+            if (e.target === el) closeProfile();
+            break;
+        case 'confirm-id-match':
+            e.stopPropagation();
+            confirmIdMatch(el.dataset.sid, el.dataset.googleEmail, el.dataset.sisName, el.dataset.googleName);
+            break;
+        case 'revert-to-point':
+            revertToPoint(el.dataset.changedAt, el.dataset.changeId);
+            break;
+        case 'mark-scheduled':
+            markScheduled(Number(el.dataset.id));
+            break;
+        case 'cancel-guidance':
+            cancelGuidance(Number(el.dataset.id));
+            break;
+        case 'toggle-notes':
+            toggleNotes(Number(el.dataset.id));
+            break;
+        case 'add-note':
+            addNote(Number(el.dataset.id));
+            break;
+        case 'deprov-tag':
+            e.stopPropagation();
+            deprovToggle(el.dataset.sid, true, el);
+            break;
+        case 'deprov-untag':
+            e.stopPropagation();
+            deprovToggle(el.dataset.sid, false, el);
+            break;
+        case 'attends-tag':
+            e.stopPropagation();
+            attendsToggle(el.dataset.sid, true);
+            break;
+        case 'attends-untag':
+            e.stopPropagation();
+            attendsToggle(el.dataset.sid, false);
+            break;
+        case 'reset-password':
+            e.stopPropagation();
+            resetStudentPassword(el.dataset.sid, el.dataset.name, el.dataset.email);
+            break;
+        case 'copy-temp-pw':
+            copyField(document.getElementById('pw-modal-value'));
+            break;
+        case 'close-pw-modal':
+            closePwModal();
+            break;
+        case 'gq-cat':
+            e.stopPropagation();
+            setGqCategory(el.dataset.cat || '');
+            break;
+        case 'no-schedule-needed':
+            e.stopPropagation();
+            noScheduleNeeded(Number(el.dataset.id));
+            break;
+    }
+});
+
+// ── Password reset ────────────────────────────────────────────────────
+async function resetStudentPassword(sid, name, email) {
+    if (!sid) return;
+    if (!confirm(
+        `Reset Google password for ${name}?\n\n` +
+        `A random temporary password will be generated. You'll see it once — ` +
+        `copy it and share with the student.\n\n` +
+        `The student will be forced to pick a new password on their next login.`
+    )) return;
+
+    const btn = document.querySelector(`[data-action="reset-password"][data-sid="${sid}"]`);
+    const orig = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = 'Resetting…'; }
+
+    try {
+        const r = await fetch(
+            `/api/roster/students/${encodeURIComponent(sid)}/reset-google-password`,
+            {method: 'POST', headers: HJ, credentials: 'same-origin'},
+        );
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data.detail || `HTTP ${r.status}`);
+        showPwModal(name, email, data.temp_password);
+    } catch (err) {
+        alert(`Password reset failed: ${err.message || err}`);
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = orig; }
+    }
+}
+
+function showPwModal(name, email, tempPw) {
+    // Kill any pre-existing modal so double-clicks don't stack them
+    closePwModal();
+    const modal = document.createElement('div');
+    modal.id = 'pw-modal-backdrop';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:100;display:flex;align-items:center;justify-content:center';
+    modal.innerHTML = `
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:20px 24px;min-width:380px;max-width:480px;box-shadow:0 12px 40px rgba(0,0,0,0.5)">
+            <div style="font-size:14px;font-weight:600;color:var(--green);margin-bottom:6px">&#9989; Password reset</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">
+                Reset for <strong style="color:var(--text)">${esc(name)}</strong>
+                (<span class="mono" style="color:var(--accent)">${esc(email)}</span>).
+            </div>
+            <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.06em">Password</div>
+            <div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:14px 16px;font-family:ui-monospace,monospace;font-size:22px;letter-spacing:0.08em;color:var(--accent);text-align:center;cursor:pointer;user-select:all" id="pw-modal-value" data-action="copy-temp-pw" title="Click to copy">${esc(tempPw)}</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:8px;text-align:center">Click to copy</div>
+            <div style="background:rgba(63,185,80,0.08);border:1px solid rgba(63,185,80,0.25);border-radius:6px;padding:10px 14px;margin-top:14px;font-size:12px;line-height:1.5;color:var(--text)">
+              <div style="font-weight:600;margin-bottom:4px">What to tell the student</div>
+              <div style="color:var(--text-muted)">
+                Standard the district student password: <span class="mono">0000</span> + last four of their SID.
+                They can sign in now with this password &mdash; no change prompt on next sign-in.
+                If they forget it, hit this button again; the same value regenerates from their SID.
+              </div>
+            </div>
+            <div style="display:flex;justify-content:flex-end;margin-top:16px">
+                <button data-action="close-pw-modal" style="padding:7px 16px;background:var(--accent);color:#0d1117;border:0;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">Done</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    // Backdrop-click closes
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closePwModal();
+    });
+}
+
+function closePwModal() {
+    const m = document.getElementById('pw-modal-backdrop');
+    if (m) m.remove();
+}
+
+// "Attends our classes" override — SIS says A/E-ish but this specific
+// kid actually attends the district classes. Same shape as deprovToggle.
+async function attendsToggle(sisId, mark) {
+    if (!sisId) return;
+    const url = `/api/roster/students/${encodeURIComponent(sisId)}/attends-our-classes`;
+    const method = mark ? 'POST' : 'DELETE';
+    const body = mark ? JSON.stringify({reason: 'manual override — attends our classes'}) : null;
+    const headers = mark
+        ? {'X-Requested-With': 'CommandNexus', 'Content-Type': 'application/json'}
+        : {'X-Requested-With': 'CommandNexus'};
+    try {
+        const r = await fetch(url, {method, headers, body});
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        // Refresh the profile modal so the banner + chip re-render with
+        // the new state.
+        openProfile(sisId);
+    } catch (err) {
+        alert('Toggle failed: ' + err.message);
+    }
+}
+
+
+async function deprovToggle(sisId, protect, chipEl) {
+    if (!sisId) return;
+    // Confirm on protect only if the user might not know what it does; skip on untag
+    const url = `/api/roster/students/${encodeURIComponent(sisId)}/deprov-exemption`;
+    const method = protect ? 'POST' : 'DELETE';
+    const body = protect ? JSON.stringify({reason: 'alt-program', notes: null}) : null;
+    const headers = protect
+        ? {'X-Requested-With': 'CommandNexus', 'Content-Type': 'application/json'}
+        : {'X-Requested-With': 'CommandNexus'};
+    // Optimistic swap of the chip before the request lands
+    const origLabel = chipEl.textContent;
+    chipEl.textContent = protect ? 'Protecting…' : 'Unprotecting…';
+    try {
+        const r = await fetch(url, {method, headers, body});
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        // Reload the current page of the directory so the row re-renders
+        // with the new flag state from the server.
+        loadDirectory();
+    } catch (err) {
+        chipEl.textContent = origLabel;
+        alert('Toggle failed: ' + err.message);
+    }
+}
+
+// Delegated change — for filter dropdowns/checkboxes that all just
+// want a reload. The originals each carried inline `paginate=0;reload()`
+// or `reload()` snippets; consolidate by tagging with data-action.
+document.body.addEventListener('change', (e) => {
+    const el = e.target.closest('[data-action]');
+    if (!el) return;
+    switch (el.dataset.action) {
+        case 'dir-reload':
+            rosterPage = 0;
+            loadDirectory();
+            break;
+        case 'reload-changes':
+            loadChanges();
+            break;
+        case 'reload-gaudit':
+            loadGoogleAudit();
+            break;
+        case 'reload-guidance':
+            loadGuidanceQueue();
+            break;
+    }
+});
+
+// Delegated keydown — the dynamically-rendered note input fires
+// addNote() on Enter. Original used inline onkeydown.
+document.body.addEventListener('keydown', (e) => {
+    const el = e.target.closest('[data-action="note-input-key"]');
+    if (!el) return;
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        addNote(Number(el.dataset.id));
+    }
+});
+
+// ── Initial load ─────────────────────────────────────────────────────────
+loadSchools().then(() => loadDirectory());
+</script>
+{% endblock %}

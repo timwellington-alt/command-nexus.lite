@@ -1,0 +1,964 @@
+{% extends "_base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block page_css %}
+<link rel="stylesheet" href="/static/vendor/leaflet.css">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font-ui); font-size: 14px; min-height: 100vh; }
+
+  /* Dashboard grid + panels — page-specific. Shell CSS handles the
+     header, nav, and shared palette. */
+  .content { max-width: 1400px; margin: 24px auto; padding: 0 24px; }
+
+  /* Masonry-style grid — auto-fit columns at ~360px each, with tiny
+     grid-auto-rows so JS can assign each panel a row-span equal to its
+     actual content height. Result: each panel only takes the space it
+     needs, panels in different "rows" pack tight. Order stays row-first
+     so it matches what the user customized. */
+  .dash-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    grid-auto-rows: 4px;
+    column-gap: 14px;
+    row-gap: 0;
+    margin-bottom: 16px;
+  }
+  .dash-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; }
+  .dash-panel h3 { margin: 0 0 10px; font-size: 13px; display: flex; align-items: center; gap: 8px; color: var(--text); }
+  .dp-metric { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+  .dp-metric .dm { text-align: center; min-width: 56px; padding: 0 4px; }
+  .dp-metric .dm-val { font-size: 22px; font-weight: 700; line-height: 1; }
+  .dp-metric .dm-val.warn { color: var(--warn); }
+  .dp-metric .dm-val.danger { color: var(--danger); }
+  .dp-metric .dm-val.ok { color: var(--success); }
+  .dp-metric .dm-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+  .dp-list { font-size: 12px; }
+  .dp-row { display: flex; align-items: center; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--border); }
+  .dp-row:last-child { border-bottom: none; }
+  .dp-row .dp-name { color: var(--text); font-weight: 500; }
+  .dp-row .dp-meta { color: var(--muted); font-size: 11px; font-family: var(--font-mono); }
+  .dp-empty { color: var(--muted); font-size: 12px; padding: 6px 0; text-align: center; }
+  .dash-badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 500; }
+  .dash-badge.ok    { background: rgba(63,185,80,0.15);  color: var(--success); border: 1px solid rgba(63,185,80,0.3); }
+  .dash-badge.warn  { background: rgba(210,153,34,0.15); color: var(--warn);    border: 1px solid rgba(210,153,34,0.3); }
+  .dash-badge.fail  { background: rgba(248,81,73,0.15);  color: var(--danger);  border: 1px solid rgba(248,81,73,0.3); }
+  .dash-badge.info  { background: rgba(88,166,255,0.15); color: var(--accent);  border: 1px solid rgba(88,166,255,0.3); }
+  .dash-badge.muted { background: rgba(139,148,158,0.12); color: var(--muted);  border: 1px solid rgba(139,148,158,0.25); }
+  .dash-full { grid-column: 1 / -1; }
+  .loading { text-align: center; padding: 40px; color: var(--muted); font-size: 12px; }
+  .error-msg { color: var(--danger); text-align: center; padding: 12px; font-size: 12px; }
+
+  /* Lightning-map card — Leaflet needs an explicit map height, and
+     the timeline strip below sits on a compact toolbar. Sized to
+     fit a single dashboard column comfortably; the analytics
+     click-through page has the bigger view. */
+  .lm-wrap { display: flex; flex-direction: column; gap: 6px; }
+  .lm-map  { height: 220px; width: 100%; border-radius: 6px; overflow: hidden; background: #0d1117; }
+  .lm-map .leaflet-container { background: #0d1117; }
+  .lm-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 11px; color: var(--muted); }
+  .lm-toolbar input[type=range] { flex: 1; min-width: 200px; accent-color: var(--accent); }
+  .lm-btn { background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 3px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; }
+  .lm-btn:hover { border-color: var(--accent); }
+  .lm-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .lm-cursor  { font-family: var(--font-mono); font-size: 11px; color: var(--text); min-width: 190px; text-align: center; padding: 2px 8px; background: var(--surface2); border-radius: 4px; }
+  .lm-summary { display: flex; gap: 12px; font-size: 11px; color: var(--muted); }
+  .lm-summary strong { color: var(--text); font-family: var(--font-mono); }
+
+  /* Customize modal */
+  .cz-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; }
+  .cz-handle { color: var(--muted); cursor: grab; font-size: 14px; user-select: none; }
+  .cz-row.dragging { opacity: 0.5; }
+  .cz-row.drag-over { border-color: var(--accent); }
+  .cz-label { flex: 1; font-size: 13px; }
+  .cz-row input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="content">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+    <h2 style="margin:0;font-size:18px">Dashboard</h2>
+    <div style="display:flex;gap:8px;align-items:center">
+      {% if modules.get('chat') %}
+      <a href="/chat"
+        style="background:var(--accent);border:1px solid var(--accent);color:#fff;padding:6px 14px;border-radius:6px;font-size:12px;font-weight:500;text-decoration:none;display:inline-flex;align-items:center;gap:6px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        Ask Nexus
+      </a>
+      {% endif %}
+      <button id="dash-customize-btn"
+        style="background:transparent;border:1px solid var(--border);color:var(--muted);padding:6px 12px;border-radius:6px;font-size:12px;cursor:pointer">
+        &#9881; Customize
+      </button>
+    </div>
+  </div>
+  <div class="dash-grid" id="dashboard">
+    <div class="dash-panel dash-full"><div class="loading">Loading dashboard…</div></div>
+  </div>
+</div>
+
+<!-- Customize modal -->
+<div id="customize-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1000;align-items:center;justify-content:center;padding:20px">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;max-width:420px;width:100%;max-height:80vh;overflow-y:auto;padding:18px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <h3 style="margin:0;font-size:15px">Customize dashboard</h3>
+      <button id="cz-close-btn" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;line-height:1">&times;</button>
+    </div>
+    <p style="font-size:11px;color:var(--muted);margin:0 0 12px">Toggle cards on or off. Drag the handle to reorder.</p>
+    <div id="customize-list" style="display:flex;flex-direction:column;gap:6px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+      <button id="cz-reset-btn" style="background:transparent;border:1px solid var(--border);color:var(--muted);padding:6px 12px;border-radius:6px;font-size:12px;cursor:pointer">Reset</button>
+      <button id="cz-save-btn" style="background:var(--accent);color:#000;border:none;padding:7px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">Save</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script nonce="{{ request.state.csp_nonce }}" src="/static/vendor/leaflet.js"></script>
+<script nonce="{{ request.state.csp_nonce }}">
+const H = {'X-Requested-With': 'CommandNexus'};
+
+function esc(s) {
+  if (s == null) return '';
+  const d = document.createElement('div');
+  d.textContent = String(s);
+  return d.innerHTML;
+}
+
+function fmtAge(minutes) {
+  if (minutes == null) return 'never';
+  if (minutes < 60) return `${minutes}m ago`;
+  const h = Math.floor(minutes / 60);
+  if (h < 48) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
+function fmtTime(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleTimeString('en-US', {
+    hour: 'numeric', minute: '2-digit', hour12: true
+  });
+}
+
+// ── Card renderers ─────────────────────────────────────────────────
+// Each renderer takes (data) and returns inner HTML for a .dash-panel.
+// data may be null — return an "unavailable" message in that case.
+
+function panelOf(label, body, opts = {}) {
+  const cls = opts.full ? 'dash-panel dash-full' : 'dash-panel';
+  // Optional href — when set, the card title becomes a link to the
+  // full-page view. Chosen over "whole card clickable" because Leaflet
+  // consumes internal clicks (pan/zoom) and shouldn't trigger a nav.
+  const heading = opts.href
+    ? `<h3><a href="${opts.href}" style="color:inherit;display:inline-flex;align-items:center;gap:6px">${esc(label)}<span style="font-size:11px;color:var(--text-muted)">↗</span></a></h3>`
+    : `<h3>${esc(label)}</h3>`;
+  return `<div class="${cls}">${heading}${body}</div>`;
+}
+
+function unavailable() {
+  return `<div class="dp-empty">Data unavailable</div>`;
+}
+
+// Cards that own a live component (Leaflet map, timeline) register an
+// init function here. Called AFTER the renderer's HTML is committed to
+// the DOM, so document.getElementById() can find the div they render.
+const CARD_INITS = {};
+
+const CARD_RENDERERS = {
+  my_status(d) {
+    if (!d) return unavailable();
+    const linkBadge = d.linked_recipient
+      ? `<span class="dash-badge ok">${esc(d.linked_recipient)}</span>`
+      : `<span class="dash-badge warn">not linked</span>`;
+    const pushBadge = d.push_devices > 0
+      ? `<span class="dash-badge ok">${d.push_devices} device${d.push_devices === 1 ? '' : 's'}</span>`
+      : `<span class="dash-badge warn">none</span>`;
+    const locBadge = d.current_building
+      ? `<span class="dash-badge ok">${esc(d.current_building)}</span>`
+      : `<span class="dash-badge muted">off-campus</span>`;
+    const quietBadge = d.in_quiet_hours
+      ? `<span class="dash-badge info">in quiet hours</span>`
+      : `<span class="dash-badge muted">business hours</span>`;
+    return `
+      <div class="dp-list">
+        <div class="dp-row"><span class="dp-name">Linked recipient</span>${linkBadge}</div>
+        <div class="dp-row"><span class="dp-name">Push devices</span>${pushBadge}</div>
+        <div class="dp-row"><span class="dp-name">Current location</span>${locBadge}</div>
+        <div class="dp-row"><span class="dp-name">Time band</span>${quietBadge}</div>
+        ${d.severity_threshold ? `<div class="dp-row"><span class="dp-name">Severity threshold</span><span class="dp-meta">${esc(d.severity_threshold)}</span></div>` : ''}
+      </div>
+      <div style="margin-top:10px"><a href="/me" style="color:var(--accent);font-size:11px;text-decoration:none">Edit my profile →</a></div>
+    `;
+  },
+
+  network_status(d) {
+    if (!d) return unavailable();
+    const downCls = d.down > 0 ? 'danger' : 'ok';
+    const alertCls = d.alerts > 0 ? 'warn' : 'ok';
+    let downList = '';
+    if ((d.down_devices || []).length) {
+      downList = `<div class="dp-list">` + d.down_devices.map(dd =>
+        `<div class="dp-row"><span class="dp-name">${esc(dd.hostname)}</span><span class="dp-meta">${esc(dd.building || '')}</span></div>`
+      ).join('') + `</div>`;
+    }
+    return `
+      <div class="dp-metric">
+        <div class="dm"><div class="dm-val ok">${d.up}</div><div class="dm-label">Up</div></div>
+        <div class="dm"><div class="dm-val ${downCls}">${d.down}</div><div class="dm-label">Down</div></div>
+        <div class="dm"><div class="dm-val ${alertCls}">${d.alerts}</div><div class="dm-label">Alerts</div></div>
+        <div class="dm"><div class="dm-val">${d.total}</div><div class="dm-label">Total</div></div>
+      </div>
+      ${downList}
+    `;
+  },
+
+  low_toner(d) {
+    if (!d) return unavailable();
+    const items = d.items || [];
+    if (!d.critical && !d.warn) {
+      return `<div class="dp-empty">All toner levels healthy</div>`;
+    }
+    const critCls = d.critical > 0 ? 'danger' : 'ok';
+    const warnCls = d.warn > 0 ? 'warn' : 'ok';
+    return `
+      <div class="dp-metric">
+        <div class="dm"><div class="dm-val ${critCls}">${d.critical}</div><div class="dm-label">Critical (&lt;10%)</div></div>
+        <div class="dm"><div class="dm-val ${warnCls}">${d.warn}</div><div class="dm-label">Low (&lt;25%)</div></div>
+        <div class="dm"><div class="dm-val ok">${d.ok}</div><div class="dm-label">OK</div></div>
+      </div>
+      <div class="dp-list">
+        ${items.map(t => {
+          const cls = t.pct < 10 ? 'fail' : t.pct < 25 ? 'warn' : 'ok';
+          return `
+            <div class="dp-row">
+              <span class="dp-name">${esc(t.hostname)} <span class="dp-meta">— ${esc(t.supply || '')}</span></span>
+              <span class="dash-badge ${cls}">${t.pct}%</span>
+            </div>`;
+        }).join('')}
+      </div>
+    `;
+  },
+
+  active_alerts(d) {
+    if (!d) return unavailable();
+    const items = d.items || [];
+    if (!items.length) return `<div class="dp-empty">No alerts in the last 24 hours</div>`;
+    return `<div class="dp-list">` + items.map(i => {
+      const sev = i.severity || 'info';
+      const out = i.outcome || 'pending';
+      const outCls = out === 'acked' ? 'ok' : out === 'no_answer' ? 'warn' : out === 'busy' ? 'warn' : 'muted';
+      return `
+        <div class="dp-row">
+          <span class="dp-name">
+            <span class="dash-badge ${sev === 'critical' ? 'fail' : sev === 'high' ? 'warn' : 'info'}">${esc(sev)}</span>
+            ${esc(i.speech || '(no summary)')}
+          </span>
+          <span class="dash-badge ${outCls}">${esc(out)}</span>
+        </div>
+      `;
+    }).join('') + `</div>`;
+  },
+
+  tech_locations(d) {
+    if (!d) return unavailable();
+    const techs = d.techs || [];
+    if (!techs.length) return `<div class="dp-empty">No active techs configured</div>`;
+    return `<div class="dp-list">` + techs.map(t => {
+      const badge = t.building
+        ? `<span class="dash-badge ok">${esc(t.building)}</span>`
+        : `<span class="dash-badge muted">off-campus</span>`;
+      return `<div class="dp-row"><span class="dp-name">${esc(t.name)}</span>${badge}</div>`;
+    }).join('') + `</div>`;
+  },
+
+  voice_cdr_24h(d) {
+    if (!d) return unavailable();
+    const ackCls = d.ack_rate_pct >= 80 ? 'ok' : d.ack_rate_pct >= 50 ? 'warn' : (d.total ? 'danger' : '');
+    return `
+      <div class="dp-metric">
+        <div class="dm"><div class="dm-val">${d.total}</div><div class="dm-label">Calls</div></div>
+        <div class="dm"><div class="dm-val ok">${d.acked}</div><div class="dm-label">Acked</div></div>
+        <div class="dm"><div class="dm-val ${ackCls}">${d.ack_rate_pct}%</div><div class="dm-label">Ack rate</div></div>
+        <div class="dm"><div class="dm-val">${d.avg_ack_seconds != null ? d.avg_ack_seconds + 's' : '—'}</div><div class="dm-label">Avg ack</div></div>
+      </div>
+      ${d.no_answer || d.busy ? `<div class="dp-list"><div class="dp-row"><span class="dp-name">No answer</span><span class="dp-meta">${d.no_answer}</span></div><div class="dp-row"><span class="dp-name">Busy</span><span class="dp-meta">${d.busy}</span></div></div>` : ''}
+    `;
+  },
+
+  wave_vms(d) {
+    if (!d) return unavailable();
+    const offCls = d.offline > 0 ? 'warn' : 'ok';
+    let events = '';
+    if ((d.events || []).length) {
+      events = `<div class="dp-list">` + d.events.map(e =>
+        `<div class="dp-row"><span class="dp-name">${esc(e.camera)}<span class="dp-meta" style="margin-left:6px">${esc(e.event_type)}</span></span><span class="dp-meta">${fmtTime(e.occurred_at)}</span></div>`
+      ).join('') + `</div>`;
+    }
+    return `
+      <div class="dp-metric">
+        <div class="dm"><div class="dm-val">${d.total}</div><div class="dm-label">Total</div></div>
+        <div class="dm"><div class="dm-val ok">${d.online}</div><div class="dm-label">Online</div></div>
+        <div class="dm"><div class="dm-val ${offCls}">${d.offline}</div><div class="dm-label">Offline</div></div>
+      </div>
+      ${events}
+    `;
+  },
+
+  hr_sync(d) {
+    if (!d) return unavailable();
+    const ageCls = d.last_sync_age_minutes == null ? 'muted'
+      : d.last_sync_age_minutes < 60 ? 'ok'
+      : d.last_sync_age_minutes < 24 * 60 ? 'warn' : 'fail';
+    return `
+      <div class="dp-metric">
+        <div class="dm"><div class="dm-val">${d.active_count}</div><div class="dm-label">Active staff</div></div>
+      </div>
+      <div class="dp-list">
+        <div class="dp-row"><span class="dp-name">Last sync</span><span class="dash-badge ${ageCls}">${fmtAge(d.last_sync_age_minutes)}</span></div>
+      </div>
+    `;
+  },
+
+  inventory_status(d) {
+    if (!d) return unavailable();
+    const pendCls = d.pending_orders > 0 ? 'warn' : 'ok';
+    const verCls = d.awaiting_verify > 0 ? 'warn' : 'ok';
+    const overdCls = d.overdue_loans > 0 ? 'danger' : 'ok';
+    const stockCls = d.low_stock > 0 ? 'warn' : 'ok';
+    return `
+      <div class="dp-metric">
+        <div class="dm"><div class="dm-val ${pendCls}">${d.pending_orders}</div><div class="dm-label">Open orders</div></div>
+        <div class="dm"><div class="dm-val ${verCls}">${d.awaiting_verify}</div><div class="dm-label">Verify queue</div></div>
+        <div class="dm"><div class="dm-val ${overdCls}">${d.overdue_loans}</div><div class="dm-label">Overdue</div></div>
+        <div class="dm"><div class="dm-val ${stockCls}">${d.low_stock}</div><div class="dm-label">Low stock</div></div>
+      </div>
+      <div style="margin-top:8px"><a href="/inventory" style="color:var(--accent);font-size:11px;text-decoration:none">Open inventory →</a></div>
+    `;
+  },
+
+  roster_changes_today(d) {
+    if (!d) return unavailable();
+    if (d.grand_total === 0) {
+      return `<div class="dp-empty">No roster changes today.</div>`;
+    }
+    const m = d.movements || {};
+    const h = d.hygiene || {};
+    const o = d.other || {};
+    const movementCls = d.movements_total > 0 ? 'warn' : 'ok';
+    return `
+      <div class="dp-metric">
+        <div class="dm"><div class="dm-val ${movementCls}">${d.movements_total}</div><div class="dm-label">Movements</div></div>
+        <div class="dm"><div class="dm-val">${d.hygiene_total}</div><div class="dm-label">Hygiene flags</div></div>
+        ${d.other_total ? `<div class="dm"><div class="dm-val">${d.other_total}</div><div class="dm-label">Other</div></div>` : ''}
+      </div>
+      <div class="dp-list">
+        ${m.added       ? `<div class="dp-row"><span class="dp-name">Added</span><span class="dash-badge ok">+${m.added}</span></div>` : ''}
+        ${m.removed     ? `<div class="dp-row"><span class="dp-name">Removed</span><span class="dash-badge warn">-${m.removed}</span></div>` : ''}
+        ${m.transferred ? `<div class="dp-row"><span class="dp-name">Transferred</span><span class="dash-badge">${m.transferred}</span></div>` : ''}
+        ${h.email_noncompliant ? `<div class="dp-row"><span class="dp-name">Email non-compliant</span><span class="dash-badge muted">${h.email_noncompliant}</span></div>` : ''}
+        ${h.missing_email      ? `<div class="dp-row"><span class="dp-name">Missing email</span><span class="dash-badge muted">${h.missing_email}</span></div>` : ''}
+        ${Object.entries(o).map(([k, v]) => `<div class="dp-row"><span class="dp-name">${esc(k)}</span><span class="dash-badge">${v}</span></div>`).join('')}
+      </div>
+      <div style="margin-top:8px"><a href="/roster/changes" style="color:var(--accent);font-size:11px;text-decoration:none">View all changes →</a></div>
+    `;
+  },
+
+  staff_queue_3d(d) {
+    if (!d) return unavailable();
+    const a = d.activity_3d || {};
+    const pending = d.pending || {};
+    if (d.pending_total === 0 && d.activity_3d_total === 0) {
+      return `<div class="dp-empty">No staff queue activity in the last 3 days.</div>`;
+    }
+    const pendingCls = d.pending_total > 0 ? 'warn' : 'ok';
+    // Aggregate "completed" outcomes across actions for the 3d KPI
+    const completedSum = Object.values(a).reduce((sum, byStatus) => sum + (byStatus.completed || 0), 0);
+    const dismissedSum = Object.values(a).reduce((sum, byStatus) => sum + (byStatus.dismissed || 0), 0);
+    const errorSum = Object.values(a).reduce((sum, byStatus) => sum + (byStatus.errored || 0), 0);
+    return `
+      <div class="dp-metric">
+        <div class="dm"><div class="dm-val ${pendingCls}">${d.pending_total}</div><div class="dm-label">Pending</div></div>
+        <div class="dm"><div class="dm-val ok">${completedSum}</div><div class="dm-label">Completed (3d)</div></div>
+        <div class="dm"><div class="dm-val">${dismissedSum}</div><div class="dm-label">Dismissed (3d)</div></div>
+        ${errorSum ? `<div class="dm"><div class="dm-val danger">${errorSum}</div><div class="dm-label">Errored</div></div>` : ''}
+      </div>
+      <div class="dp-list">
+        ${Object.entries(pending).map(([action, n]) => `<div class="dp-row"><span class="dp-name">Pending · ${esc(action)}</span><span class="dash-badge warn">${n}</span></div>`).join('')}
+      </div>
+      <div style="margin-top:8px"><a href="/staff" style="color:var(--accent);font-size:11px;text-decoration:none">Open staff →</a></div>
+    `;
+  },
+
+  population(d) {
+    if (!d) return unavailable();
+    if (!d.buildings || !d.buildings.length) {
+      return `<div class="dp-empty">No population data yet — check DHCP ingest status.</div>`;
+    }
+    const staleBadge = d.stale ? '<span class="dash-badge warn" style="margin-left:6px">Stale</span>' : '';
+    const rows = d.buildings.map(b => {
+      // Conservative people estimate — max(chromebooks, phones)
+      // (phones includes the 'Unknown mobile' bucket)
+      const est = Math.max(b.chromebooks || 0, b.phones || 0);
+      return `
+        <div class="dp-row">
+          <span class="dp-name">${esc(b.building)}</span>
+          <span style="display:flex;gap:10px;font-size:12px">
+            <span title="Estimated people"><strong>${est}</strong></span>
+            <span class="dash-badge muted" title="Phones (incl unknown mobile)">📱 ${b.phones || 0}</span>
+            <span class="dash-badge muted" title="Chromebooks">💻 ${b.chromebooks || 0}</span>
+            <span class="dash-badge muted" title="All devices">∑ ${b.all_devices || 0}</span>
+          </span>
+        </div>`;
+    }).join('');
+    return `
+      <div style="margin-bottom:6px;font-size:11px;color:var(--text-muted)">
+        Snapshot: ${fmtAge(Math.floor((Date.now() - new Date(d.snapshot_at)) / 60000))} ago${staleBadge}
+      </div>
+      <div class="dp-list">${rows}</div>
+      <div style="margin-top:8px"><a href="/network/population" style="color:var(--accent);font-size:11px;text-decoration:none">Detail by AP →</a></div>
+    `;
+  },
+
+  clever_sync(d) {
+    if (!d) return unavailable();
+    const ageCls = d.last_sync_age_minutes == null ? 'muted'
+      : d.last_sync_age_minutes < 36 * 60 ? 'ok'         // within ~daily cycle
+      : d.last_sync_age_minutes < 7 * 24 * 60 ? 'warn'
+      : 'fail';
+    return `
+      <div class="dp-metric">
+        <div class="dm"><div class="dm-val">${d.student_count}</div><div class="dm-label">Active students</div></div>
+        ${d.import_days != null ? `<div class="dm"><div class="dm-val">${d.import_days}</div><div class="dm-label">Days w/ imports</div></div>` : ''}
+      </div>
+      <div class="dp-list">
+        <div class="dp-row"><span class="dp-name">Last sync</span><span class="dash-badge ${ageCls}">${fmtAge(d.last_sync_age_minutes)}</span></div>
+      </div>
+    `;
+  },
+
+  weather(d) {
+    if (!d) return unavailable();
+    const c = d.conditions;
+    let condHtml;
+    if (c && c.temperature_f != null) {
+      const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+      const wDir = c.wind_direction != null ? dirs[Math.round(c.wind_direction / 22.5) % 16] : '';
+      condHtml = `
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:8px">
+          <div style="font-size:30px;font-weight:700;font-family:var(--font-mono);line-height:1">${Math.round(c.temperature_f)}&deg;F</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;color:var(--text)">${esc(c.description || '')}</div>
+            <div style="font-size:11px;color:var(--muted)">Wind: ${c.wind_mph || 0} mph ${esc(wDir)} &middot; Humidity: ${c.humidity != null ? Math.round(c.humidity) + '%' : 'N/A'}</div>
+          </div>
+        </div>`;
+    } else {
+      condHtml = '<div class="dp-empty">Conditions unavailable</div>';
+    }
+    let fcHtml = '';
+    const fc = d.forecast || [];
+    if (fc.length) {
+      fcHtml = '<div style="display:flex;gap:6px;margin-bottom:6px;min-width:0">' + fc.map(p => {
+        const tempCls = p.is_day ? 'warn' : 'info';
+        return `<div style="flex:1 1 0;min-width:0;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:6px 6px;text-align:center;overflow:hidden">
+          <div style="font-size:9px;font-weight:600;color:var(--accent);text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(p.name || '')}">${esc(p.name || '')}</div>
+          <div style="font-size:14px;font-weight:700;font-family:var(--font-mono);color:var(--${tempCls === 'warn' ? 'warn' : 'accent'})">${p.temp != null ? p.temp : '?'}&deg;${esc(p.unit || 'F')}</div>
+          <div style="font-size:9px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(p.short || '')}">${esc(p.short || '')}</div>
+        </div>`;
+      }).join('') + '</div>';
+    }
+    let alertsHtml = '';
+    if ((d.alerts || []).length) {
+      alertsHtml = '<div style="margin-top:6px">' + d.alerts.slice(0, 2).map(a => {
+        const sev = (a.severity || '').toLowerCase();
+        const cls = sev === 'extreme' || sev === 'severe' ? 'fail' : sev === 'moderate' ? 'warn' : 'info';
+        const raw = a.headline || a.description || '';
+        const body = raw.length > 200 ? raw.slice(0, 200).replace(/\s+\S*$/, '') + '…' : raw;
+        return `<div class="dash-badge ${cls}" style="display:block;margin-bottom:4px;padding:6px 10px;line-height:1.35;white-space:normal;overflow-wrap:anywhere"><strong>${esc(a.event || 'Alert')}</strong>: ${esc(body)}</div>`;
+      }).join('') + '</div>';
+    }
+    // Lightning strip — compact, single-row at bottom of the card.
+    // Coloured background scales with proximity (red ≤ 10mi, yellow
+    // > 10mi but >0 strikes, neutral when count==0). Shown unless we
+    // have no lightning data at all.
+    let lightningHtml = '';
+    const lt = d.lightning;
+    if (lt) {
+      const count = lt.count || 0;
+      const closest = lt.closest_miles;
+      const radius = lt.radius_miles || 25;
+      let valCls = 'muted', boxBg = 'var(--bg)';
+      if (count > 0 && closest != null && closest <= 10) { valCls = 'danger'; boxBg = 'rgba(248,81,73,0.10)'; }
+      else if (count > 0) { valCls = 'warn'; boxBg = 'rgba(210,153,34,0.08)'; }
+      let detail;
+      if (count === 0) {
+        detail = `<span style="font-size:11px;color:var(--muted)">No strikes within ${radius} mi</span>`;
+      } else {
+        const ago = lt.latest_at ? Math.max(0, Math.round((Date.now() - new Date(lt.latest_at).getTime()) / 1000)) : null;
+        const agoTxt = ago == null ? '' : (ago < 60 ? `${ago}s` : ago < 3600 ? `${Math.round(ago/60)}m` : `${Math.round(ago/3600)}h`);
+        detail = `<span style="font-size:11px;color:var(--text)">Closest <strong>${closest} mi</strong> &middot; last ${agoTxt} &middot; within ${radius} mi</span>`;
+      }
+      let stale = '';
+      if (!lt.connected) stale = `<span style="font-size:10px;color:var(--danger);margin-left:6px">&#9888; offline</span>`;
+      else if (lt.last_msg_at) {
+        const msgAge = Math.round((Date.now() - new Date(lt.last_msg_at).getTime()) / 1000);
+        if (msgAge > 600) stale = `<span style="font-size:10px;color:var(--danger);margin-left:6px">&#9888; ${Math.round(msgAge/60)}m no data</span>`;
+      }
+      lightningHtml = `
+        <div style="margin-top:8px;display:flex;align-items:center;gap:10px;padding:6px 10px;background:${boxBg};border:1px solid var(--border);border-radius:5px">
+          <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px">⚡ Lightning</span>
+          <span class="dm-val ${valCls}" style="font-size:18px;font-weight:700;font-family:var(--font-mono);line-height:1">${count}</span>
+          <span style="flex:1;min-width:0">${detail}</span>
+          ${stale}
+        </div>`;
+    }
+    return condHtml + fcHtml + alertsHtml + lightningHtml;
+  },
+
+  spectrum_outages(d) {
+    if (!d) return unavailable();
+    // Map service status → badge class + headline label
+    const STATUS = {
+      clear:   {cls: 'ok',   label: 'All Clear'},
+      rising:  {cls: 'warn', label: 'Elsewhere'},
+      outage:  {cls: 'fail', label: 'Outage'},
+      unknown: {cls: 'info', label: 'No Data'},
+    };
+    const s = STATUS[d.status] || STATUS.unknown;
+    const headline = `
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+        <span class="dash-badge ${s.cls}" style="font-size:13px;padding:6px 12px;font-weight:700">${s.label}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px">Spectrum / Charter</div>
+          <div style="font-size:11px;color:var(--text)">${esc(d.area || '')}</div>
+        </div>
+      </div>`;
+    if (d.status === 'unknown') {
+      return headline + `<div class="dp-empty" style="font-size:11px">${esc(d.error || 'Status unavailable')}</div>`;
+    }
+    // Counters strip mirrors the population/inventory cards' "dm" style
+    const counters = `
+      <div class="dp-metrics" style="margin-bottom:6px">
+        <div class="dm"><div class="dm-val ${d.outages_open ? 'warn' : ''}">${d.outages_open || 0}</div><div class="dm-label">Open</div></div>
+        <div class="dm"><div class="dm-val">${d.outages_24h_total || 0}</div><div class="dm-label">24h Total</div></div>
+        <div class="dm"><div class="dm-val">${esc(d.state || '?')}</div><div class="dm-label">State</div></div>
+      </div>`;
+    let eventsHtml = '';
+    if ((d.events || []).length) {
+      eventsHtml = '<div class="dp-list">' + d.events.slice(0, 3).map(ev => {
+        const locs = (ev.locations || []).join(', ') || '?';
+        const desc = ev.description || ev.type || '—';
+        return `<div class="dp-row" style="align-items:flex-start;gap:8px;padding:4px 0">
+          <span class="dp-name" style="white-space:normal">${esc(desc)}</span>
+          <span class="dash-badge info" style="font-size:10px">${esc(locs)}</span>
+        </div>`;
+      }).join('') + '</div>';
+    } else if (d.status === 'clear') {
+      eventsHtml = `<div class="dp-empty" style="font-size:11px">No Spectrum outages reported in ${esc(d.state || 'your area')} in the last 24h.</div>`;
+    }
+    return headline + counters + eventsHtml;
+  },
+
+  lightning_map(d) {
+    if (!d) return unavailable();
+    const c = d.center || {};
+    if (c.lat == null || c.lon == null) {
+      return `<div class="dp-empty">Center not configured — set weather.latitude / weather.longitude.</div>`;
+    }
+    const s = d.summary || {};
+    const summaryLine = `
+      <div class="lm-summary">
+        <span>Last hour: <strong>${s.last_1h ?? 0}</strong></span>
+        <span>Last 24h: <strong>${s.last_24h ?? 0}</strong></span>
+        <span>Stored (30d): <strong>${s.total_stored ?? 0}</strong></span>
+      </div>`;
+    return `
+      <div class="lm-wrap">
+        <div class="lm-map" id="lm-map"></div>
+        <div class="lm-toolbar">
+          <button class="lm-btn" data-lm-play title="Play/Pause timeline">▶</button>
+          <span class="lm-cursor" id="lm-cursor">—</span>
+          <input type="range" id="lm-slider" min="0" max="100" step="1" value="100">
+          <span style="display:flex;gap:4px">
+            <button class="lm-btn" data-lm-range="1h" title="last hour">1h</button>
+            <button class="lm-btn" data-lm-range="6h" title="last 6 hours">6h</button>
+            <button class="lm-btn active" data-lm-range="24h" title="last 24 hours">24h</button>
+            <button class="lm-btn" data-lm-range="7d" title="last 7 days">7d</button>
+            <button class="lm-btn" data-lm-range="30d" title="full retention">30d</button>
+          </span>
+        </div>
+        ${summaryLine}
+      </div>`;
+  },
+};
+
+// Initialize the Leaflet map + timeline. Called once after the card's
+// HTML is committed. Owns the map state in a closure so multiple
+// dashboard reloads don't leak Leaflet instances.
+CARD_INITS.lightning_map = function(d) {
+  if (!d || !window.L) return;
+  const c = d.center || {};
+  if (c.lat == null || c.lon == null) return;
+  const mapEl = document.getElementById('lm-map');
+  if (!mapEl) return;
+  // Prevent re-init on masonry re-render — Leaflet complains loudly
+  // if you call L.map() twice on the same div.
+  if (mapEl._lmInited) return;
+  mapEl._lmInited = true;
+
+  const map = L.map(mapEl, {
+    center: [c.lat, c.lon],
+    zoom: 11,
+    zoomControl: false,   // saves ~40px of chrome on the small card
+    attributionControl: true,
+  });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 18,
+    attribution: '© OSM',
+  }).addTo(map);
+  // Ingest-radius ring — visual reminder of the 25 mi cutoff.
+  const radiusMeters = (d.radius_miles || 25) * 1609.344;
+  L.circle([c.lat, c.lon], {
+    radius: radiusMeters, color: '#58a6ff', weight: 1, fillOpacity: 0.05,
+  }).addTo(map);
+  // Blue dot as center — L.marker() defaults to leaflet's
+  // marker-icon.png which we don't ship in /static/vendor, so the
+  // default marker rendered as a broken-image placeholder. circleMarker
+  // is pure SVG, no image asset needed.
+  L.circleMarker([c.lat, c.lon], {
+    radius: 6, color: '#ffffff', weight: 2,
+    fillColor: '#58a6ff', fillOpacity: 1,
+  }).addTo(map).bindTooltip('Center');
+  // Fit view to a tight window around the center — the full ingest
+  // ring (25 mi ≈ ±0.5°) leaves a lot of dead ocean/countryside on
+  // the small card. ~7 mi window shows the district + immediate area
+  // where storms actually appear; users can zoom out if they want more.
+  map.fitBounds([[c.lat - 0.10, c.lon - 0.14], [c.lat + 0.10, c.lon + 0.14]]);
+
+  // ── Timeline state ────────────────────────────────────────────
+  // Cursor is a UTC epoch-ms position; rangeMs is the total window
+  // covered by the slider (24h default). Each strike shown is
+  // within ±_windowMs / 2 of the cursor (a small sliding gauze).
+  let _rangeMs = 24 * 3600 * 1000;
+  const _WINDOW_FRAC = 0.05; // 5% of the range = the visible "gauze"
+  let _cursorMs = Date.now();
+  let _strikes = [];        // strikes fetched for the current range
+  let _lastFetchKey = null;
+  const _layer = L.layerGroup().addTo(map);
+  const slider = document.getElementById('lm-slider');
+  const cursorEl = document.getElementById('lm-cursor');
+  const rangeBtns = mapEl.parentElement.querySelectorAll('[data-lm-range]');
+  const playBtn = mapEl.parentElement.querySelector('[data-lm-play]');
+  let _playing = false;
+  let _playTimer = null;
+
+  function fmtCursor(ms) {
+    const dt = new Date(ms);
+    return dt.toLocaleString([], {
+      month: 'short', day: 'numeric',
+      hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true,
+    });
+  }
+  function updateCursor(v) {
+    // slider 0..100 → cursorMs from (now - range) .. now
+    const now = Date.now();
+    _cursorMs = (now - _rangeMs) + (v / 100) * _rangeMs;
+    cursorEl.textContent = fmtCursor(_cursorMs);
+    drawStrikes();
+  }
+  function drawStrikes() {
+    _layer.clearLayers();
+    // Show ALL strikes in the range — dim ones outside the cursor
+    // "gauze" instead of hiding them. Matches the count in the KPI
+    // strip; playback still gets the moving-storm effect via the
+    // opacity contrast, not by hiding markers.
+    const halfWin = (_rangeMs * _WINDOW_FRAC) / 2;
+    const IN_MIN = 0.4, OUT = 0.18;
+    let inGauze = 0;
+    for (const s of _strikes) {
+      const inWindow = (s.ms >= _cursorMs - halfWin && s.ms <= _cursorMs + halfWin);
+      let opacity;
+      if (inWindow) {
+        const dist = Math.abs(s.ms - _cursorMs) / halfWin;
+        opacity = Math.max(IN_MIN, 1 - dist);
+        inGauze++;
+      } else {
+        opacity = OUT;
+      }
+      L.circleMarker([s.lat, s.lon], {
+        radius: inWindow ? 5 : 3,
+        color: '#f85149', weight: inWindow ? 1 : 0,
+        fillColor: '#ff6b6b', fillOpacity: opacity,
+      }).addTo(_layer).bindTooltip(
+        `${fmtCursor(s.ms)}<br>${s.miles} mi · ${s.polarity === -1 ? '−' : s.polarity === 1 ? '+' : '?'}${s.mds ? ' · ×' + s.mds : ''}`,
+        {direction: 'top'},
+      );
+    }
+    cursorEl.textContent = `${fmtCursor(_cursorMs)}  ·  ${inGauze} live · ${_strikes.length} total`;
+  }
+  async function fetchRange() {
+    const now = Date.now();
+    const since = new Date(now - _rangeMs).toISOString();
+    const until = new Date(now + 60_000).toISOString(); // +1min buffer for clock drift
+    const key = `${since}|${until}`;
+    if (_lastFetchKey === key) return;
+    _lastFetchKey = key;
+    try {
+      const r = await fetch(`/api/network/lightning/history?since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}&limit=5000`, {headers: H});
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const payload = await r.json();
+      _strikes = (payload.strikes || []).map(s => ({
+        ...s,
+        ms: new Date(s.at).getTime(),
+      }));
+      updateCursor(parseInt(slider.value, 10));
+    } catch(e) {
+      console.warn('lightning history fetch failed', e);
+    }
+  }
+  function setRange(rangeStr) {
+    const map = {'1h': 3600e3, '6h': 6*3600e3, '24h': 24*3600e3,
+                 '7d': 7*24*3600e3, '30d': 30*24*3600e3};
+    _rangeMs = map[rangeStr] || 24*3600e3;
+    // Reset cursor to "now" on range change so the visible strikes
+    // shift into view instead of the slider seeming to jump.
+    slider.value = 100;
+    rangeBtns.forEach(b => b.classList.toggle('active', b.dataset.lmRange === rangeStr));
+    fetchRange();
+  }
+  function togglePlay() {
+    _playing = !_playing;
+    playBtn.textContent = _playing ? '⏸' : '▶';
+    playBtn.classList.toggle('active', _playing);
+    if (_playing) {
+      _playTimer = setInterval(() => {
+        let v = parseInt(slider.value, 10);
+        v += 1;
+        if (v > 100) { v = 0; }
+        slider.value = v;
+        updateCursor(v);
+      }, 150);
+    } else {
+      clearInterval(_playTimer); _playTimer = null;
+    }
+  }
+
+  slider.addEventListener('input', () => updateCursor(parseInt(slider.value, 10)));
+  rangeBtns.forEach(b => b.addEventListener('click', () => setRange(b.dataset.lmRange)));
+  playBtn.addEventListener('click', togglePlay);
+
+  // Initial pull — 24h range as configured by the active button.
+  fetchRange();
+};
+
+// ── Main load ─────────────────────────────────────────────────────
+
+async function loadDashboard() {
+  const grid = document.getElementById('dashboard');
+  try {
+    const r = await fetch('/api/dashboard/cards-data', {credentials: 'same-origin', headers: H});
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const payload = await r.json();
+    const layout = payload.layout || [];
+    if (!layout.length) {
+      grid.innerHTML = `<div class="dash-panel dash-full"><div class="dp-empty">No cards enabled. Click <strong>Customize</strong> to pick what to show.</div></div>`;
+      return;
+    }
+    const cards = payload.cards || {};
+    // Cards that click through to a dedicated analytics/full-view page.
+    // Keeps the mapping declarative rather than baking hrefs into each
+    // renderer's return string.
+    const CARD_HREFS = {
+      lightning_map: '/network/lightning',
+    };
+    grid.innerHTML = layout.map(cid => {
+      const c = cards[cid] || {};
+      const renderer = CARD_RENDERERS[cid];
+      const body = renderer ? renderer(c.data) : `<div class="error-msg">No renderer for ${esc(cid)}</div>`;
+      // 'wide' cards span the full grid width — needed for map/timeline
+      // views like lightning_map that can't shrink to a normal cell.
+      return panelOf(c.label || cid, body, {full: !!c.wide, href: CARD_HREFS[cid]});
+    }).join('');
+    // Cards that own live components (Leaflet maps, timelines) need a
+    // post-render init hook. Runs after innerHTML is committed so
+    // document.getElementById() can find the target divs.
+    layout.forEach(cid => {
+      const c = cards[cid] || {};
+      const init = CARD_INITS[cid];
+      if (init) {
+        try { init(c.data); } catch (e) { console.warn(`init ${cid} failed`, e); }
+      }
+    });
+    packMasonry();
+  } catch(e) {
+    grid.innerHTML = `<div class="dash-panel dash-full"><div class="error-msg">Failed to load dashboard: ${esc(e.message)}</div></div>`;
+  }
+}
+
+// Masonry packer — compute each panel's row-span from its real height so
+// every card takes only as much vertical space as it needs. Without this,
+// a sparse card next to a dense card would inherit the dense card's row
+// height (default CSS-grid behavior) and waste space.
+function packMasonry() {
+  const grid = document.getElementById('dashboard');
+  const styles = getComputedStyle(grid);
+  const baseRow = parseFloat(styles.gridAutoRows) || 4;
+  const rowGap = parseFloat(styles.rowGap) || 0;
+  const colGap = parseFloat(styles.columnGap) || 0;
+  // We use row-gap:0 so panels can pack against each other; instead of
+  // a real grid gap we add visual spacing via the panel's margin-bottom.
+  // Use scrollHeight, not getBoundingClientRect().height. Panels start
+  // without a row-span so they collapse into a single 4px grid track —
+  // getBoundingClientRect would return that clipped 4px and lock every
+  // panel at one row. scrollHeight reports the natural content height
+  // regardless of the visible (clipped) box, so the math works on the
+  // first call and on every rerender.
+  document.querySelectorAll('.dash-panel:not(.dash-full)').forEach(panel => {
+    panel.style.marginBottom = '12px';
+    const h = panel.scrollHeight + 12;  // include margin
+    const rows = Math.max(1, Math.ceil((h + rowGap) / (baseRow + rowGap)));
+    panel.style.gridRowEnd = `span ${rows}`;
+  });
+  // Full-width panels still occupy a normal flow row at their natural size
+  document.querySelectorAll('.dash-panel.dash-full').forEach(panel => {
+    panel.style.marginBottom = '12px';
+    const h = panel.scrollHeight + 12;
+    const rows = Math.max(1, Math.ceil((h + rowGap) / (baseRow + rowGap)));
+    panel.style.gridRowEnd = `span ${rows}`;
+  });
+}
+
+// Re-pack on window resize (column count may change at breakpoints)
+let resizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(packMasonry, 150);
+});
+
+loadDashboard();
+setInterval(loadDashboard, 60000);
+
+// ── Customize modal ───────────────────────────────────────────────
+
+let _czCatalog = null;
+let _czOrder = [];
+
+async function openCustomize() {
+  const modal = document.getElementById('customize-modal');
+  modal.style.display = 'flex';
+  document.getElementById('customize-list').innerHTML = `<div class="dp-empty">Loading…</div>`;
+  try {
+    const r = await fetch('/api/dashboard/catalog', {credentials: 'same-origin', headers: H});
+    _czCatalog = await r.json();
+    // Order: enabled cards first (in saved order), disabled ones last (in registry order)
+    const enabledSet = new Set(_czCatalog.layout || []);
+    const disabled = _czCatalog.cards.map(c => c.id).filter(id => !enabledSet.has(id));
+    _czOrder = [...(_czCatalog.layout || []), ...disabled];
+    renderCustomizeList();
+  } catch(e) {
+    document.getElementById('customize-list').innerHTML = `<div class="error-msg">Failed to load: ${esc(e.message)}</div>`;
+  }
+}
+
+function closeCustomize() {
+  document.getElementById('customize-modal').style.display = 'none';
+}
+
+function renderCustomizeList() {
+  if (!_czCatalog) return;
+  const byId = Object.fromEntries(_czCatalog.cards.map(c => [c.id, c]));
+  const enabled = new Set(_czCatalog.layout || []);
+  const list = document.getElementById('customize-list');
+  list.innerHTML = _czOrder.map(id => {
+    const c = byId[id];
+    if (!c) return '';
+    return `
+      <div class="cz-row" draggable="true" data-id="${esc(id)}">
+        <span class="cz-handle" title="Drag to reorder">&#x2630;</span>
+        <span class="cz-label">${esc(c.label)}</span>
+        <input type="checkbox" ${enabled.has(id) ? 'checked' : ''} data-id="${esc(id)}">
+      </div>
+    `;
+  }).join('');
+
+  // Wire checkboxes
+  list.querySelectorAll('input[type=checkbox]').forEach(cb => {
+    cb.addEventListener('change', e => {
+      const id = e.target.dataset.id;
+      const en = new Set(_czCatalog.layout);
+      if (e.target.checked) en.add(id); else en.delete(id);
+      _czCatalog.layout = _czOrder.filter(x => en.has(x));
+    });
+  });
+
+  // Wire drag-to-reorder
+  let dragId = null;
+  list.querySelectorAll('.cz-row').forEach(row => {
+    row.addEventListener('dragstart', e => {
+      dragId = row.dataset.id;
+      row.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    row.addEventListener('dragend', () => {
+      row.classList.remove('dragging');
+      list.querySelectorAll('.cz-row').forEach(r => r.classList.remove('drag-over'));
+    });
+    row.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      list.querySelectorAll('.cz-row').forEach(r => r.classList.remove('drag-over'));
+      row.classList.add('drag-over');
+    });
+    row.addEventListener('drop', e => {
+      e.preventDefault();
+      if (!dragId || dragId === row.dataset.id) return;
+      const targetId = row.dataset.id;
+      const fromIdx = _czOrder.indexOf(dragId);
+      const toIdx = _czOrder.indexOf(targetId);
+      if (fromIdx < 0 || toIdx < 0) return;
+      _czOrder.splice(fromIdx, 1);
+      _czOrder.splice(toIdx, 0, dragId);
+      // Re-derive layout from new order, keeping enabled set intact
+      const en = new Set(_czCatalog.layout);
+      _czCatalog.layout = _czOrder.filter(x => en.has(x));
+      renderCustomizeList();
+    });
+  });
+}
+
+async function saveLayout() {
+  if (!_czCatalog) return;
+  try {
+    const r = await fetch('/api/me/dashboard', {
+      method: 'PATCH', credentials: 'same-origin',
+      headers: {...H, 'Content-Type': 'application/json'},
+      body: JSON.stringify({layout: _czCatalog.layout}),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    closeCustomize();
+    loadDashboard();
+  } catch(e) {
+    alert('Save failed: ' + e.message);
+  }
+}
+
+async function resetLayout() {
+  if (!confirm('Reset to default layout (all cards your permissions allow)?')) return;
+  try {
+    await fetch('/api/me/dashboard', {
+      method: 'PATCH', credentials: 'same-origin',
+      headers: {...H, 'Content-Type': 'application/json'},
+      body: JSON.stringify({layout: null}),
+    });
+    closeCustomize();
+    loadDashboard();
+  } catch(e) {
+    alert('Reset failed: ' + e.message);
+  }
+}
+
+// CSP forbids inline onclick — wire customize modal buttons here.
+document.getElementById('dash-customize-btn').addEventListener('click', openCustomize);
+document.getElementById('cz-close-btn').addEventListener('click', closeCustomize);
+document.getElementById('cz-reset-btn').addEventListener('click', resetLayout);
+document.getElementById('cz-save-btn').addEventListener('click', saveLayout);
+</script>
+{% endblock %}

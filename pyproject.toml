@@ -1,0 +1,15 @@
+[project]
+name = "command-nexus"
+version = "2.0.0"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]

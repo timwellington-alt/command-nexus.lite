@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>New Hire Onboarding — the district</title>
+<style nonce="{{ request.state.csp_nonce }}">
+:root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1c2129;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --red: #f85149;
+}
+* { box-sizing: border-box; }
+/* Lock the page: no pinch-zoom, no horizontal scroll, no rubber-band
+   overscroll. `touch-action: pan-y` is the real muscle here — the
+   viewport meta alone is ignored by iOS Safari for user-scalable. */
+html, body {
+    overflow-x: hidden;
+    overscroll-behavior: none;
+    touch-action: pan-y;
+}
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    padding: 24px 16px;
+    min-height: 100vh;
+    /* Kill inertia / overscroll bounce on iOS. */
+    -webkit-overflow-scrolling: auto;
+    max-width: 100vw;
+}
+/* Belt-and-suspenders: prevent any element from bursting past the
+   viewport width (long placeholder text, wide inputs, etc.). */
+input, select, .card { max-width: 100%; }
+.card {
+    max-width: 520px;
+    margin: 24px auto;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 28px;
+}
+h1 { margin: 0 0 4px; font-size: 22px; }
+.subtitle { color: var(--text-muted); font-size: 13px; margin-bottom: 20px; }
+label { display: block; font-size: 12px; color: var(--text-muted); margin: 12px 0 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+input, select {
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 15px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+}
+input:focus, select:focus { outline: none; border-color: var(--accent); }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+button {
+    width: 100%;
+    padding: 12px;
+    margin-top: 20px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+}
+button:hover { filter: brightness(1.1); }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+.msg { padding: 12px; border-radius: 6px; margin-top: 16px; font-size: 14px; }
+.msg-ok { background: rgba(63,185,80,0.1); border: 1px solid rgba(63,185,80,0.3); color: var(--green); }
+.msg-err { background: rgba(248,81,73,0.1); border: 1px solid rgba(248,81,73,0.3); color: var(--red); }
+.hint { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+.bldg-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: 12px;
+    color: var(--accent);
+    font-weight: 600;
+    margin-left: 4px;
+}
+.photo-block {
+    margin-top: 12px;
+    padding: 12px;
+    background: var(--surface2);
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+    text-align: center;
+}
+.photo-block label { text-align: left; margin-top: 0; }
+.photo-preview {
+    max-width: 180px; max-height: 180px;
+    border-radius: 8px; border: 1px solid var(--border);
+    margin: 12px auto 6px; display: block;
+}
+.photo-picker {
+    display: inline-flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 10px 16px; margin-top: 8px;
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 6px; cursor: pointer;
+    color: var(--text); font-size: 14px;
+}
+.photo-picker input[type=file] { display: none; }
+.photo-picker:hover { border-color: var(--accent); }
+.photo-remove {
+    margin-top: 6px; background: none; border: none; padding: 4px 8px;
+    color: var(--text-muted); font-size: 12px; cursor: pointer;
+    width: auto; text-decoration: underline;
+}
+.photo-remove:hover { color: var(--red); }
+.photo-btn-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 8px; }
+.photo-btn {
+    flex: 1 1 140px; padding: 12px 16px;
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text); font-size: 14px; cursor: pointer;
+    max-width: 200px;
+}
+.photo-btn:hover { border-color: var(--accent); }
+.photo-btn.primary { background: var(--accent); border-color: var(--accent); color: white; }
+/* Camera modal — a full-viewport dark overlay with the live video
+   and an ID-optimized frame guide drawn on top. Face oval + shoulders
+   line show the recipient where to position themselves. */
+.cam-overlay {
+    display: none; position: fixed; inset: 0; z-index: 9999;
+    background: rgba(0,0,0,0.95); flex-direction: column;
+    align-items: center; justify-content: center; padding: 16px;
+    /* Suppress iOS scroll-through so the modal doesn't bounce. */
+    touch-action: none;
+}
+.cam-overlay.open { display: flex; }
+.cam-stage {
+    position: relative; width: 100%; max-width: 380px;
+    aspect-ratio: 3 / 4; background: #000; border-radius: 12px;
+    overflow: hidden;
+}
+.cam-stage video {
+    width: 100%; height: 100%; object-fit: cover;
+    /* Selfie mirror — matches user's mental model. Flip is
+       re-baked into the output canvas so the saved photo isn't
+       mirrored on the reviewer's side. */
+    transform: scaleX(-1);
+}
+.cam-frame {
+    position: absolute; inset: 0; pointer-events: none;
+}
+.cam-frame svg { width: 100%; height: 100%; }
+.cam-hint {
+    color: var(--text); font-size: 13px; text-align: center;
+    margin: 12px 0 8px; max-width: 380px; line-height: 1.4;
+}
+.cam-controls {
+    display: flex; gap: 12px; margin-top: 8px; width: 100%;
+    max-width: 380px; justify-content: center;
+}
+.cam-controls button {
+    flex: 1; padding: 12px; border-radius: 8px; font-size: 15px;
+    font-weight: 600; cursor: pointer; border: none;
+}
+.cam-shoot { background: var(--accent); color: white; }
+.cam-cancel { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+.cam-error { color: var(--red); font-size: 13px; margin-top: 8px; text-align: center; max-width: 380px; }
+</style>
+</head>
+<body>
+<div class="card">
+    <h1>New Hire Onboarding</h1>
+    <p class="subtitle">Building <span class="bldg-badge">{{ building }}</span> — please fill in your info so the tech team can set up your account.</p>
+
+    <form id="onboardForm">
+        <div class="row2">
+            <div>
+                <label>First Name</label>
+                <input id="first_name" required maxlength="60" autocomplete="given-name">
+            </div>
+            <div>
+                <label>Last Name</label>
+                <input id="last_name" required maxlength="60" autocomplete="family-name">
+            </div>
+        </div>
+
+        <label>Preferred Name (optional)</label>
+        <input id="preferred_name" maxlength="60" placeholder="What you'd like to be called">
+        <div class="hint">If you go by "Kate" but your legal name is "Kathleen", put "Kate" here.</div>
+
+        <div class="row2">
+            <div>
+                <label>Room Number</label>
+                <input id="room" required maxlength="20" value="{{ preset_room }}" placeholder="e.g. 127">
+            </div>
+            <div>
+                <label>Role</label>
+                <select id="assignment" required>
+                    <option value="">Pick one…</option>
+                    {% for a in assignments %}
+                    <option value="{{ a }}">{{ a }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <label>Title (optional)</label>
+        <input id="title" maxlength="120" value="{{ preset_title }}" placeholder="e.g. 2nd Grade Teacher">
+
+        <label>Cell Phone (optional)</label>
+        <input id="cell_phone" type="tel" maxlength="30" placeholder="For urgent-ticket notifications">
+
+        <label>Personal Email (optional)</label>
+        <input id="personal_email" type="email" maxlength="120" placeholder="Where we'll send your welcome info">
+
+        <div class="photo-block">
+            <label style="margin-top:0">Photo for Your ID Badge <span style="color:var(--red)">*</span></label>
+            <div class="hint" style="margin-bottom:6px">Required · JPEG, PNG, or WebP · 5&nbsp;MB max · face + shoulders, plain background</div>
+            <img id="photo-preview" class="photo-preview" style="display:none" alt="">
+            <div class="photo-btn-row">
+                <button id="photo-camera-btn" class="photo-btn primary" type="button">📷 Take Photo</button>
+                <button id="photo-file-btn"   class="photo-btn"         type="button">🖼️ Choose File</button>
+            </div>
+            <!-- Not `required` — the field is hidden so native validation
+                 would silently block submit when a camera capture is in
+                 use (blob populated, file input empty). JS validates
+                 both paths at submit time. -->
+            <input id="photo-file" type="file" accept="image/*" style="display:none">
+            <button id="photo-remove" class="photo-remove" type="button" style="display:none">Remove photo</button>
+        </div>
+
+        <!-- Camera modal — custom in-page capture with an ID-optimized
+             frame guide so the new hire lines up the shot correctly.
+             Rendered outside the form so submit + validation isn't
+             affected when the modal is open. -->
+        <div id="cam-overlay" class="cam-overlay" aria-hidden="true">
+            <div class="cam-stage">
+                <video id="cam-video" playsinline muted autoplay></video>
+                <div class="cam-frame">
+                    <svg viewBox="0 0 300 400" preserveAspectRatio="none">
+                        <defs>
+                            <mask id="idmask">
+                                <rect width="300" height="400" fill="white"/>
+                                <!-- Face oval — centered, upper-third of the frame -->
+                                <ellipse cx="150" cy="155" rx="85" ry="105" fill="black"/>
+                                <!-- Shoulder trapezoid -->
+                                <path d="M 60,320 Q 150,270 240,320 L 260,400 L 40,400 Z" fill="black"/>
+                            </mask>
+                        </defs>
+                        <!-- Dim everything outside the guide zones -->
+                        <rect width="300" height="400" fill="rgba(0,0,0,0.55)" mask="url(#idmask)"/>
+                        <!-- Guide outlines -->
+                        <ellipse cx="150" cy="155" rx="85" ry="105"
+                                 fill="none" stroke="#58a6ff" stroke-width="2" stroke-dasharray="6 4"/>
+                        <path d="M 60,320 Q 150,270 240,320"
+                              fill="none" stroke="#58a6ff" stroke-width="2" stroke-dasharray="6 4"/>
+                    </svg>
+                </div>
+            </div>
+            <div class="cam-hint">Line up your face in the oval. Shoulders on the arc. Plain background if you can.</div>
+            <div class="cam-controls">
+                <button id="cam-cancel" class="cam-cancel" type="button">Cancel</button>
+                <button id="cam-shoot"  class="cam-shoot"  type="button">📸 Capture</button>
+            </div>
+            <div id="cam-error" class="cam-error"></div>
+        </div>
+        <canvas id="cam-canvas" style="display:none"></canvas>
+
+        <button id="submitBtn" type="submit">Submit</button>
+        <div id="msg"></div>
+    </form>
+</div>
+
+<script nonce="{{ request.state.csp_nonce }}">
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+const ALLOWED_PHOTO_MIME = ['image/jpeg', 'image/png', 'image/webp'];
+
+const photoInput = document.getElementById('photo-file');
+const photoPreview = document.getElementById('photo-preview');
+const photoRemoveBtn = document.getElementById('photo-remove');
+const photoCamBtn = document.getElementById('photo-camera-btn');
+const photoFileBtn = document.getElementById('photo-file-btn');
+let _photoObjectURL = null;
+let _capturedBlob = null;   // set when the custom camera is used
+
+function _setPhotoPreview(url) {
+    if (_photoObjectURL) URL.revokeObjectURL(_photoObjectURL);
+    _photoObjectURL = url;
+    photoPreview.src = url;
+    photoPreview.style.display = 'block';
+    photoRemoveBtn.style.display = '';
+    photoCamBtn.textContent = '📷 Retake Photo';
+    photoFileBtn.textContent = '🖼️ Choose Different';
+}
+
+photoFileBtn.addEventListener('click', () => photoInput.click());
+
+photoInput.addEventListener('change', () => {
+    const msg = document.getElementById('msg');
+    msg.className = ''; msg.textContent = '';
+    const f = photoInput.files[0];
+    if (!f) return;
+    if (!ALLOWED_PHOTO_MIME.includes(f.type)) {
+        msg.className = 'msg msg-err';
+        msg.textContent = 'Photo must be a JPEG, PNG, or WebP image.';
+        photoInput.value = '';
+        return;
+    }
+    if (f.size > MAX_PHOTO_BYTES) {
+        msg.className = 'msg msg-err';
+        msg.textContent = 'Photo must be under 5MB.';
+        photoInput.value = '';
+        return;
+    }
+    _capturedBlob = null;   // file overrides any prior camera capture
+    _setPhotoPreview(URL.createObjectURL(f));
+});
+
+photoRemoveBtn.addEventListener('click', () => {
+    if (_photoObjectURL) URL.revokeObjectURL(_photoObjectURL);
+    _photoObjectURL = null;
+    _capturedBlob = null;
+    photoInput.value = '';
+    photoPreview.src = '';
+    photoPreview.style.display = 'none';
+    photoRemoveBtn.style.display = 'none';
+    photoCamBtn.textContent = '📷 Take Photo';
+    photoFileBtn.textContent = '🖼️ Choose File';
+});
+
+// ── ID-optimized camera capture ─────────────────────────────────
+const camOverlay = document.getElementById('cam-overlay');
+const camVideo   = document.getElementById('cam-video');
+const camCanvas  = document.getElementById('cam-canvas');
+const camShoot   = document.getElementById('cam-shoot');
+const camCancel  = document.getElementById('cam-cancel');
+const camError   = document.getElementById('cam-error');
+let _camStream = null;
+
+async function openCamera() {
+    camError.textContent = '';
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        alert('Your browser doesn\'t support in-page camera capture. Please use Choose File.');
+        return;
+    }
+    try {
+        _camStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'user',
+                     width: { ideal: 720 }, height: { ideal: 960 },
+                     aspectRatio: { ideal: 3/4 } },
+            audio: false,
+        });
+        camVideo.srcObject = _camStream;
+        camOverlay.classList.add('open');
+        camOverlay.setAttribute('aria-hidden', 'false');
+    } catch (e) {
+        camError.textContent = 'Could not open the camera: ' + (e.message || e.name);
+        camOverlay.classList.add('open');
+    }
+}
+
+function closeCamera() {
+    if (_camStream) { _camStream.getTracks().forEach(t => t.stop()); _camStream = null; }
+    camVideo.srcObject = null;
+    camOverlay.classList.remove('open');
+    camOverlay.setAttribute('aria-hidden', 'true');
+}
+
+photoCamBtn.addEventListener('click', openCamera);
+camCancel.addEventListener('click', closeCamera);
+
+camShoot.addEventListener('click', () => {
+    if (!camVideo.videoWidth) return;
+    // Draw a portrait-oriented crop centered on the video. If the
+    // source is 4:3 landscape we crop to 3:4 portrait so the saved
+    // photo matches what the guide showed on-screen. Also un-mirror
+    // via ctx.scale(-1, 1) so the reviewer's view isn't reversed.
+    const vw = camVideo.videoWidth, vh = camVideo.videoHeight;
+    const targetAspect = 3 / 4;
+    const srcAspect = vw / vh;
+    let sx = 0, sy = 0, sw = vw, sh = vh;
+    if (srcAspect > targetAspect) {
+        sw = Math.round(vh * targetAspect);
+        sx = Math.round((vw - sw) / 2);
+    } else if (srcAspect < targetAspect) {
+        sh = Math.round(vw / targetAspect);
+        sy = Math.round((vh - sh) / 2);
+    }
+    camCanvas.width = 720; camCanvas.height = 960;
+    const ctx = camCanvas.getContext('2d');
+    ctx.save();
+    ctx.translate(camCanvas.width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(camVideo, sx, sy, sw, sh, 0, 0, camCanvas.width, camCanvas.height);
+    ctx.restore();
+    camCanvas.toBlob(blob => {
+        if (!blob) return;
+        _capturedBlob = blob;
+        photoInput.value = '';   // file input yields to captured blob at submit
+        _setPhotoPreview(URL.createObjectURL(blob));
+        closeCamera();
+    }, 'image/jpeg', 0.9);
+});
+
+document.getElementById('onboardForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('submitBtn');
+    const msg = document.getElementById('msg');
+    msg.className = '';
+    msg.textContent = '';
+    const hasPhoto = _capturedBlob || photoInput.files.length > 0;
+    if (!hasPhoto) {
+        msg.className = 'msg msg-err';
+        msg.textContent = 'Please add an ID-badge photo before submitting.';
+        return;
+    }
+    btn.disabled = true;
+    btn.textContent = 'Submitting…';
+
+    // FormData for multipart submission (needed for the photo file).
+    const fd = new FormData();
+    fd.append('first_name',     document.getElementById('first_name').value.trim());
+    fd.append('last_name',      document.getElementById('last_name').value.trim());
+    fd.append('preferred_name', document.getElementById('preferred_name').value.trim());
+    fd.append('room',           document.getElementById('room').value.trim());
+    fd.append('assignment',     document.getElementById('assignment').value);
+    fd.append('title',          document.getElementById('title').value.trim());
+    fd.append('cell_phone',     document.getElementById('cell_phone').value.trim());
+    fd.append('personal_email', document.getElementById('personal_email').value.trim());
+    if (_capturedBlob) {
+        fd.append('photo', _capturedBlob, 'onboard.jpg');
+    } else if (photoInput.files.length > 0) {
+        fd.append('photo', photoInput.files[0]);
+    }
+
+    try {
+        const resp = await fetch(window.location.pathname, {
+            method: 'POST',
+            body: fd,
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) {
+            msg.className = 'msg msg-err';
+            msg.textContent = data.detail || 'Something went wrong — please try again.';
+            btn.disabled = false;
+            btn.textContent = 'Submit';
+            return;
+        }
+        msg.className = 'msg msg-ok';
+        msg.textContent = data.message || 'Thanks — your info was received.';
+        document.getElementById('onboardForm').querySelectorAll('input, select, button').forEach(el => el.disabled = true);
+    } catch (err) {
+        msg.className = 'msg msg-err';
+        msg.textContent = 'Network error — please try again.';
+        btn.disabled = false;
+        btn.textContent = 'Submit';
+    }
+});
+</script>
+</body>
+</html>

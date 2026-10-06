@@ -1,0 +1,1716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Chromebook Mobile — Mockup</title>
+<style>
+:root {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --surface2: #21262d;
+  --border: #30363d;
+  --text: #e6edf3;
+  --text-muted: #8b949e;
+  --accent: #58a6ff;
+  --accent-dim: rgba(88,166,255,0.15);
+  --accent-glow: rgba(88,166,255,0.28);
+  --green: #3fb950;
+  --green-dim: rgba(63,185,80,0.15);
+  --yellow: #d29922;
+  --yellow-dim: rgba(210,153,34,0.15);
+  --red: #f85149;
+  --red-dim: rgba(248,81,73,0.15);
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body {
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+  max-width: 100vw;
+  height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.4;
+}
+body { display: flex; flex-direction: column; }
+
+/* ── Topbar ───────────────────────────────────────────────── */
+.topbar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+  z-index: 20;
+}
+.tb-btn {
+  width: 38px; height: 38px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text-muted);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 17px;
+  cursor: pointer;
+  flex-shrink: 0;
+  font-family: inherit;
+}
+.tb-btn:active { background: var(--border); transform: scale(.94); }
+.tb-btn.active { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
+.tb-center { flex: 1; min-width: 0; max-width: 100%; overflow: hidden; }
+.tb-title {
+  font-size: 16px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.03em;
+  line-height: 1.15;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.tb-sub {
+  font-size: 10px; color: var(--text-muted);
+  letter-spacing: 0.05em; margin-top: 1px;
+  font-family: var(--mono);
+}
+
+/* ── Screens ───────────────────────────────────────────────── */
+.screen {
+  display: none; flex-direction: column;
+  flex: 1; overflow: hidden;
+}
+.screen.active { display: flex; }
+.scroll {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 14px 12px 32px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Section header ───────────────────────────────────────── */
+.sec {
+  display: flex; align-items: center; gap: 8px;
+  margin: 12px 0 8px;
+}
+.sec:first-child { margin-top: 0; }
+.sec-lbl {
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.sec-line { flex: 1; height: 1px; background: var(--border); }
+.sec-ct {
+  font-family: var(--mono);
+  font-size: 10px; color: var(--text-muted);
+}
+
+/* ── Root hint (pointer to topbar scan button) ────────────── */
+.root-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 14px 4px 4px;
+  line-height: 1.5;
+}
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px; height: 22px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--accent);
+  font-size: 12px;
+  margin: 0 2px;
+  vertical-align: middle;
+}
+
+/* ── Mode tile (bulk scan launcher) ───────────────────────── */
+.mode-tile {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 14px;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--text);
+  text-align: left;
+  min-width: 0;
+}
+.mode-tile:active { background: var(--surface2); transform: scale(.99); }
+.mode-icon {
+  width: 44px; height: 44px;
+  border-radius: 9px;
+  background: var(--accent-dim);
+  color: var(--accent);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+.mode-text { flex: 1; min-width: 0; }
+.mode-title {
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text);
+}
+.mode-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 3px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.mode-chev {
+  color: var(--text-muted);
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+/* ── Search bar ───────────────────────────────────────────── */
+.searchbar {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0 12px;
+}
+.searchbar:focus-within { border-color: var(--accent); }
+.searchbar-icon { color: var(--text-muted); font-size: 13px; }
+.searchbar input {
+  flex: 1;
+  background: none; border: none; outline: none;
+  color: var(--text);
+  font-size: 13px;
+  padding: 10px 0;
+  font-family: var(--mono);
+  min-width: 0;
+}
+.searchbar input::placeholder { color: var(--text-muted); }
+
+/* ── Device header card (detail screen) ───────────────────── */
+.dev-hdr {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 14px;
+}
+.dev-hdr-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.dev-serial {
+  font-family: var(--mono);
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text);
+  word-break: break-all;
+}
+.dev-model {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 3px;
+}
+.badge {
+  padding: 4px 10px;
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+.badge.ok { background: var(--green-dim); color: var(--green); }
+.badge.warn { background: var(--yellow-dim); color: var(--yellow); }
+.badge.bad { background: var(--red-dim); color: var(--red); }
+.badge.muted { background: rgba(125,133,144,0.15); color: var(--text-muted); }
+
+.dev-assigned {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+.dev-user-row {
+  display: flex; align-items: center; gap: 10px;
+}
+.dev-user-avatar {
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 14px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.dev-user-info { flex: 1; min-width: 0; }
+.dev-user-name {
+  font-size: 14px; font-weight: 600;
+  color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.dev-user-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.dev-user-change {
+  padding: 6px 11px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  font-family: inherit;
+  flex-shrink: 0;
+}
+.dev-user-change:active { background: var(--border); }
+
+/* ── Data cards (key/value grid) ──────────────────────────── */
+.kvcard {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+.kvrow {
+  display: flex;
+  padding: 10px 14px;
+  gap: 12px;
+  align-items: flex-start;
+  border-bottom: 1px solid var(--border);
+  min-width: 0;
+}
+.kvrow:last-child { border-bottom: none; }
+.kvrow.clickable { cursor: pointer; }
+.kvrow.clickable:active { background: var(--surface2); }
+.kvkey {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  flex-shrink: 0;
+  width: 96px;
+  padding-top: 2px;
+}
+.kvval {
+  flex: 1; min-width: 0;
+  font-size: 13px;
+  color: var(--text);
+  word-break: break-word;
+}
+.kvval.mono {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.kvval .muted { color: var(--text-muted); }
+.kvedit {
+  color: var(--accent);
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+/* ── Editable inline ──────────────────────────────────────── */
+.inline-edit {
+  display: flex; gap: 6px;
+  width: 100%;
+  margin-top: 2px;
+}
+.inline-edit input {
+  flex: 1;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 10px;
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+  font-family: inherit;
+  min-width: 0;
+}
+.inline-edit input:focus { border-color: var(--accent); }
+.inline-edit .ok-btn {
+  width: 32px;
+  background: var(--accent);
+  border: none;
+  border-radius: 6px;
+  color: #000;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.inline-edit .x-btn {
+  width: 32px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  flex-shrink: 0;
+  font-family: inherit;
+}
+
+/* ── Action button rows ───────────────────────────────────── */
+.action-list {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+.action-row {
+  display: flex;
+  align-items: center;
+  padding: 13px 14px;
+  gap: 12px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  background: var(--surface);
+  min-width: 0;
+}
+.action-row:last-child { border-bottom: none; }
+.action-row:active { background: var(--surface2); }
+.action-icon {
+  font-size: 18px;
+  width: 22px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.action-label {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  min-width: 0;
+}
+.action-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  flex-shrink: 1;
+  min-width: 0;
+}
+.action-chev { color: var(--text-muted); font-size: 14px; flex-shrink: 0; }
+.action-row.danger .action-icon,
+.action-row.danger .action-label { color: var(--red); }
+.action-row.warn .action-icon,
+.action-row.warn .action-label { color: var(--yellow); }
+.action-row.go .action-icon,
+.action-row.go .action-label { color: var(--green); }
+
+/* ── Flag pill ────────────────────────────────────────────── */
+.flag-pills {
+  display: flex; gap: 6px;
+  padding: 10px 14px;
+  flex-wrap: wrap;
+}
+.flag-pill {
+  padding: 5px 11px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  font-family: inherit;
+}
+.flag-pill.active.inv { background: var(--yellow-dim); color: var(--yellow); border-color: var(--yellow); }
+.flag-pill.active.rec { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
+.flag-pill.active.lost { background: var(--red-dim); color: var(--red); border-color: var(--red); }
+
+/* ── AP / Network card ────────────────────────────────────── */
+.netcard {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 14px;
+  min-width: 0;
+}
+.netcard-title {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 10px;
+}
+.netcard-row {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 8px;
+  min-width: 0;
+}
+.netcard-row:last-child { margin-bottom: 0; }
+.netcard-key {
+  font-size: 10px; color: var(--text-muted);
+  text-transform: uppercase;
+  width: 66px;
+  flex-shrink: 0;
+}
+.netcard-val {
+  flex: 1; min-width: 0;
+  font-size: 13px;
+  font-family: var(--mono);
+  color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.signal-bars {
+  display: inline-flex; align-items: flex-end; gap: 2px;
+  height: 12px; margin-right: 6px;
+}
+.signal-bars > span {
+  width: 3px;
+  background: var(--green);
+  border-radius: 1px;
+}
+.signal-bars > span:nth-child(1) { height: 30%; }
+.signal-bars > span:nth-child(2) { height: 55%; }
+.signal-bars > span:nth-child(3) { height: 80%; }
+.signal-bars > span:nth-child(4) { height: 100%; }
+
+/* ── Damage photo grid ────────────────────────────────────── */
+.photo-block {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 14px;
+}
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.photo-thumb {
+  aspect-ratio: 1;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px;
+  color: var(--text-muted);
+}
+.photo-add {
+  aspect-ratio: 1;
+  background: var(--surface2);
+  border: 2px dashed var(--border);
+  border-radius: 7px;
+  color: var(--text-muted);
+  font-size: 28px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-family: inherit;
+}
+
+/* ── Primary / secondary buttons ──────────────────────────── */
+.btn {
+  width: 100%;
+  padding: 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  font-family: inherit;
+}
+.btn:active { transform: scale(.98); }
+.btn.primary {
+  background: var(--accent);
+  color: #000;
+  border-color: var(--accent);
+}
+.btn.danger {
+  background: var(--red-dim);
+  color: var(--red);
+  border-color: var(--red);
+}
+.btn.warn {
+  background: var(--yellow-dim);
+  color: var(--yellow);
+  border-color: var(--yellow);
+}
+.btn.go {
+  background: var(--green-dim);
+  color: var(--green);
+  border-color: var(--green);
+}
+
+/* ── Bulk scanner screen ──────────────────────────────────── */
+.bulk-vf-wrap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+.bulk-vf-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px;
+  background: var(--surface2);
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+}
+.bulk-vf-header:active { background: var(--border); }
+.bulk-vf-wrap.collapsed .bulk-vf-header { border-bottom: none; }
+.bulk-vf-icon { font-size: 14px; }
+.bulk-vf-title {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text);
+}
+.bulk-vf-state {
+  font-size: 10px;
+  color: var(--green);
+  font-family: var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 7px;
+  border-radius: 3px;
+  background: var(--green-dim);
+}
+.bulk-vf-wrap.collapsed .bulk-vf-state { color: var(--text-muted); background: var(--surface2); }
+.bulk-vf-chev {
+  color: var(--text-muted);
+  font-size: 10px;
+  transition: transform 0.2s;
+}
+.bulk-vf-wrap.collapsed .bulk-vf-chev { transform: rotate(-90deg); }
+.bulk-vf-wrap.collapsed .bulk-viewfinder { display: none; }
+
+.bulk-viewfinder {
+  width: 100%;
+  aspect-ratio: 16/9;
+  background: #000;
+  position: relative;
+  overflow: hidden;
+}
+.bulk-viewfinder::before {
+  content: 'Tap to fake-scan another device';
+  position: absolute;
+  inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-family: var(--mono);
+  letter-spacing: 0.04em;
+}
+.bulk-corner {
+  position: absolute;
+  width: 22px; height: 22px;
+  border-color: var(--accent);
+  border-style: solid;
+}
+.bulk-corner.tl { top: 10px; left: 10px; border-width: 2px 0 0 2px; border-radius: 4px 0 0 0; }
+.bulk-corner.tr { top: 10px; right: 10px; border-width: 2px 2px 0 0; border-radius: 0 4px 0 0; }
+.bulk-corner.bl { bottom: 10px; left: 10px; border-width: 0 0 2px 2px; border-radius: 0 0 0 4px; }
+.bulk-corner.br { bottom: 10px; right: 10px; border-width: 0 2px 2px 0; border-radius: 0 0 4px 0; }
+.bulk-scanline {
+  position: absolute; left: 10px; right: 10px;
+  height: 2px;
+  background: var(--accent);
+  opacity: 0.75;
+  top: 10px;
+  animation: scan 2.2s ease-in-out infinite;
+}
+@keyframes scan {
+  0%, 100% { top: 10px; }
+  50% { top: calc(100% - 12px); }
+}
+
+.bulk-count {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+  margin-bottom: 10px;
+}
+.bulk-count strong { color: var(--accent); font-size: 15px; margin-right: 6px; }
+
+.bulk-rows {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+.bulk-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  min-width: 0;
+}
+.bulk-row:last-child { border-bottom: none; }
+.bulk-row-num {
+  font-family: var(--mono); font-size: 10px;
+  color: var(--text-muted);
+  width: 22px;
+  flex-shrink: 0;
+}
+.bulk-row-info { flex: 1; min-width: 0; }
+.bulk-row-serial {
+  font-family: var(--mono); font-size: 12px;
+  color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.bulk-row-user {
+  font-size: 10px; color: var(--text-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.bulk-row-del {
+  width: 26px; height: 26px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+  flex-shrink: 0;
+  font-family: inherit;
+}
+
+/* ── Bottom sheet ─────────────────────────────────────────── */
+.sheet-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.78);
+  backdrop-filter: blur(3px);
+  z-index: 200;
+  align-items: flex-end;
+}
+.sheet-overlay.open { display: flex; }
+.sheet {
+  width: 100%;
+  background: var(--surface);
+  border-radius: 16px 16px 0 0;
+  border-top: 1px solid var(--accent);
+  max-height: 78dvh;
+  display: flex; flex-direction: column;
+  animation: sheetup 0.22s ease-out;
+}
+@keyframes sheetup {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+.sheet-handle {
+  width: 32px; height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  margin: 9px auto 0;
+  flex-shrink: 0;
+}
+.sheet-title {
+  padding: 12px 16px 9px;
+  font-size: 14px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.sheet-body {
+  overflow-y: auto;
+  flex: 1;
+  padding: 10px 12px 16px;
+}
+.sheet-search {
+  display: flex; gap: 8px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0 12px;
+  margin: 10px 12px 6px;
+}
+.sheet-search input {
+  flex: 1;
+  background: none; border: none; outline: none;
+  color: var(--text);
+  font-size: 13px;
+  padding: 9px 0;
+  font-family: var(--mono);
+}
+.sheet-item {
+  display: flex; align-items: center; gap: 11px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  min-width: 0;
+}
+.sheet-item:last-child { border-bottom: none; }
+.sheet-item:active { background: var(--surface2); }
+.sheet-item-icon {
+  font-size: 16px;
+  width: 22px;
+  flex-shrink: 0;
+}
+.sheet-item-info { flex: 1; min-width: 0; }
+.sheet-item-name {
+  font-size: 14px; font-weight: 600;
+  color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sheet-item-sub {
+  font-size: 10px; color: var(--text-muted);
+  font-family: var(--mono);
+  margin-top: 1px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* ── Scanner overlay (fake) ───────────────────────────────── */
+.scanner-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.94);
+  z-index: 300;
+  flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 18px;
+  padding: 16px;
+}
+.scanner-overlay.open { display: flex; }
+.scanner-frame {
+  position: relative;
+  width: min(280px, 72vw);
+  aspect-ratio: 1;
+  background: #0a0a0a;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.scanner-frame::before {
+  content: 'Camera preview';
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-family: var(--mono);
+}
+.scanner-corners { position: absolute; inset: 0; pointer-events: none; }
+.scanner-hint {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+  text-align: center;
+}
+.scanner-close {
+  padding: 11px 28px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+/* ── Toast ────────────────────────────────────────────────── */
+.toast {
+  position: fixed;
+  bottom: calc(22px + env(safe-area-inset-bottom, 0));
+  left: 50%;
+  transform: translateX(-50%) translateY(70px);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  padding: 9px 18px;
+  font-size: 12px; font-weight: 600;
+  z-index: 310;
+  transition: transform .22s cubic-bezier(.34,1.56,.64,1);
+  pointer-events: none;
+  white-space: nowrap;
+}
+.toast.show { transform: translateX(-50%) translateY(0); }
+.toast.ok { border-color: var(--green); color: var(--green); }
+.toast.err { border-color: var(--red); color: var(--red); }
+.toast.warn { border-color: var(--yellow); color: var(--yellow); }
+.toast.info { border-color: var(--accent); color: var(--accent); }
+
+/* ── Misc ─────────────────────────────────────────────────── */
+.divider-note {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  text-align: center;
+  padding: 8px 0;
+  font-style: italic;
+}
+</style>
+</head>
+<body>
+
+<!-- ────────────────────────────────────────────────────────── -->
+<!-- TOPBAR                                                     -->
+<!-- ────────────────────────────────────────────────────────── -->
+<header class="topbar">
+  <button class="tb-btn" id="tb-back" style="display:none" onclick="goBack()">&larr;</button>
+  <div class="tb-center">
+    <div class="tb-title" id="tb-title">Chromebooks</div>
+    <div class="tb-sub" id="tb-sub">MOCKUP · TROJAN NEXUS</div>
+  </div>
+  <button class="tb-btn" id="tb-bulk" onclick="toggleBulkHeader()" title="Bulk mode">&#x2630;</button>
+  <button class="tb-btn" id="tb-scan" onclick="openScanner()" title="Scan">&#x25a3;</button>
+</header>
+
+<!-- ────────────────────────────────────────────────────────── -->
+<!-- SCREEN: ROOT                                               -->
+<!-- ────────────────────────────────────────────────────────── -->
+<div class="screen active" id="screen-root">
+  <div class="scroll">
+    <div class="searchbar" style="margin-top:0">
+      <span class="searchbar-icon">&#x1f50d;</span>
+      <input type="text" id="root-search" placeholder="Search serial, user, asset tag…" oninput="simulateSearch(this.value)" autocomplete="off">
+    </div>
+    <div class="root-hint">
+      Tap <span class="kbd">&#x25a3;</span> in the top right to scan, or type above to search.
+    </div>
+
+    <!-- Fake search results — show up after typing 2+ chars -->
+    <div id="root-results" style="display:none"></div>
+
+    <!-- Demo shortcut — straight into the single device view -->
+    <button class="mode-tile" style="margin-top:10px" onclick="go('detail')">
+      <div class="mode-icon">&#x1f4be;</div>
+      <div class="mode-text">
+        <div class="mode-title">Sample Device</div>
+        <div class="mode-sub">Skip the scanner — open the detail mockup directly</div>
+      </div>
+      <div class="mode-chev">&rsaquo;</div>
+    </button>
+
+    <div class="sec"><div class="sec-lbl">Modes</div><div class="sec-line"></div></div>
+    <button class="mode-tile" onclick="openBulkMode()">
+      <div class="mode-icon">&#x2630;</div>
+      <div class="mode-text">
+        <div class="mode-title">Bulk Scan</div>
+        <div class="mode-sub">Scan many devices, then apply one action</div>
+      </div>
+      <div class="mode-chev">&rsaquo;</div>
+    </button>
+
+    <div class="divider-note">Full filter view, saved filters, and the data table live on desktop /chromebook</div>
+  </div>
+</div>
+
+<!-- ────────────────────────────────────────────────────────── -->
+<!-- SCREEN: SINGLE DEVICE DETAIL                               -->
+<!-- ────────────────────────────────────────────────────────── -->
+<div class="screen" id="screen-detail">
+  <div class="scroll">
+
+    <!-- Header / identity -->
+    <div class="dev-hdr">
+      <div class="dev-hdr-top">
+        <div style="min-width:0;flex:1">
+          <div class="dev-serial">5CD3125ABC</div>
+          <div class="dev-model">HP Chromebook 11 G8 EE &middot; Asset #PES-2138</div>
+        </div>
+        <div class="badge ok">Active</div>
+      </div>
+
+      <div class="dev-assigned">
+        <div class="dev-user-row">
+          <div class="dev-user-avatar">JB</div>
+          <div class="dev-user-info">
+            <div class="dev-user-name">Jordan Bishop</div>
+            <div class="dev-user-meta">jordan.bishop@students.pcs.net &middot; Grade 6 &middot; PES</div>
+          </div>
+          <button class="dev-user-change" onclick="openSheet('user')">Change</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Inventory data -->
+    <div class="sec"><div class="sec-lbl">Inventory</div><div class="sec-line"></div></div>
+    <div class="kvcard">
+      <div class="kvrow">
+        <div class="kvkey">Model</div>
+        <div class="kvval">HP Chromebook 11 G8 EE</div>
+      </div>
+      <div class="kvrow">
+        <div class="kvkey">OU</div>
+        <div class="kvval">/PES/Student/Grade 6</div>
+        <div class="kvedit" onclick="openSheet('ou')">&#x270e;</div>
+      </div>
+      <div class="kvrow">
+        <div class="kvkey">Building</div>
+        <div class="kvval">District Elementary (BLDG1)</div>
+      </div>
+      <div class="kvrow">
+        <div class="kvkey">Asset Tag</div>
+        <div class="kvval mono">PES-2138</div>
+        <div class="kvedit" onclick="inlineEdit('asset-tag')">&#x270e;</div>
+      </div>
+      <div class="kvrow" id="row-asset-tag-edit" style="display:none">
+        <div class="kvkey">Asset Tag</div>
+        <div class="inline-edit">
+          <input type="text" value="PES-2138" id="input-asset-tag">
+          <button class="ok-btn" onclick="saveInline('asset-tag', 'Asset tag saved')">&check;</button>
+          <button class="x-btn" onclick="cancelInline('asset-tag')">&times;</button>
+        </div>
+      </div>
+      <div class="kvrow">
+        <div class="kvkey">Location</div>
+        <div class="kvval">Room 204 — Mrs. Adkins</div>
+        <div class="kvedit" onclick="inlineEdit('location')">&#x270e;</div>
+      </div>
+      <div class="kvrow" id="row-location-edit" style="display:none">
+        <div class="kvkey">Location</div>
+        <div class="inline-edit">
+          <input type="text" value="Room 204 — Mrs. Adkins" id="input-location">
+          <button class="ok-btn" onclick="saveInline('location', 'Location saved')">&check;</button>
+          <button class="x-btn" onclick="cancelInline('location')">&times;</button>
+        </div>
+      </div>
+      <div class="kvrow">
+        <div class="kvkey">Notes</div>
+        <div class="kvval muted" id="notes-display"><em>— no notes —</em></div>
+        <div class="kvedit" onclick="inlineEdit('notes')">&#x270e;</div>
+      </div>
+      <div class="kvrow" id="row-notes-edit" style="display:none">
+        <div class="kvkey">Notes</div>
+        <div class="inline-edit">
+          <input type="text" placeholder="Free text…" id="input-notes">
+          <button class="ok-btn" onclick="saveInline('notes', 'Note saved')">&check;</button>
+          <button class="x-btn" onclick="cancelInline('notes')">&times;</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Status & flag -->
+    <div class="sec"><div class="sec-lbl">Status & Flag</div><div class="sec-line"></div></div>
+    <div class="kvcard">
+      <div class="kvrow">
+        <div class="kvkey">Google</div>
+        <div class="kvval"><span class="badge ok">Active</span></div>
+      </div>
+      <div class="kvrow">
+        <div class="kvkey">Enrollment</div>
+        <div class="kvval mono">2023-08-15</div>
+      </div>
+      <div class="kvrow">
+        <div class="kvkey">Last Sync</div>
+        <div class="kvval mono">2 hours ago <span class="muted">(12:14 EDT)</span></div>
+      </div>
+      <div class="kvrow">
+        <div class="kvkey">Flag</div>
+        <div class="kvval">
+          <div class="flag-pills" style="padding:0">
+            <button class="flag-pill inv" onclick="setFlag(this, 'inv', 'Flagged Investigate')">Investigate</button>
+            <button class="flag-pill rec" onclick="setFlag(this, 'rec', 'Flagged Recovery')">Recovery</button>
+            <button class="flag-pill lost" onclick="setFlag(this, 'lost', 'Flagged Lost')">Lost</button>
+            <button class="flag-pill" onclick="clearFlags()">Clear</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AP / Network info (from our existing data) -->
+    <div class="sec"><div class="sec-lbl">Network &middot; Last Seen</div><div class="sec-line"></div></div>
+    <div class="netcard">
+      <div class="netcard-title">Wireless</div>
+      <div class="netcard-row">
+        <div class="netcard-key">AP</div>
+        <div class="netcard-val">pes-ap-rm204</div>
+      </div>
+      <div class="netcard-row">
+        <div class="netcard-key">SSID</div>
+        <div class="netcard-val">PCS-Student</div>
+      </div>
+      <div class="netcard-row">
+        <div class="netcard-key">Signal</div>
+        <div class="netcard-val">
+          <span class="signal-bars"><span></span><span></span><span></span><span></span></span>
+          -52 dBm
+        </div>
+      </div>
+      <div class="netcard-row">
+        <div class="netcard-key">IP / MAC</div>
+        <div class="netcard-val">192.0.2.1 &middot; aa:bb:cc:dd:ee:01</div>
+      </div>
+      <div class="netcard-row">
+        <div class="netcard-key">Last Seen</div>
+        <div class="netcard-val">8 minutes ago</div>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="sec"><div class="sec-lbl">Actions</div><div class="sec-line"></div></div>
+    <div class="action-list">
+      <div class="action-row" onclick="openSheet('ou')">
+        <div class="action-icon">&#x1f4c1;</div>
+        <div class="action-label">Move to OU</div>
+        <div class="action-sub">/PES/Student/Grade 6</div>
+        <div class="action-chev">&rsaquo;</div>
+      </div>
+      <div class="action-row" onclick="openSheet('user')">
+        <div class="action-icon">&#x1f464;</div>
+        <div class="action-label">Reassign User</div>
+        <div class="action-sub">Jordan Bishop</div>
+        <div class="action-chev">&rsaquo;</div>
+      </div>
+      <div class="action-row" onclick="openDamageReport()">
+        <div class="action-icon">&#x1f6e0;&#xfe0f;</div>
+        <div class="action-label">Report Damage</div>
+        <div class="action-chev">&rsaquo;</div>
+      </div>
+      <div class="action-row" onclick="toast('Queued 1 label → Brother QL (PES-2138)', 'ok')">
+        <div class="action-icon">&#x1f3f7;&#xfe0f;</div>
+        <div class="action-label">Print Label</div>
+        <div class="action-sub">Brother QL</div>
+        <div class="action-chev">&rsaquo;</div>
+      </div>
+      <div class="action-row" onclick="toast('Location request sent to Google', 'info')">
+        <div class="action-icon">&#x1f4cd;</div>
+        <div class="action-label">Last Known Location</div>
+        <div class="action-chev">&rsaquo;</div>
+      </div>
+      <div class="action-row" onclick="toast('Refreshing from Google…', 'info')">
+        <div class="action-icon">&#x21bb;</div>
+        <div class="action-label">Refresh from Google</div>
+        <div class="action-sub">2h ago</div>
+      </div>
+    </div>
+
+    <div class="action-list">
+      <div class="action-row warn" onclick="confirmAction('Disable this device?', 'Device disabled')">
+        <div class="action-icon">&#x23f8;&#xfe0f;</div>
+        <div class="action-label">Disable Device</div>
+      </div>
+      <div class="action-row danger" onclick="confirmAction('Deprovision this device? This removes it from your fleet.', 'Deprovisioned')">
+        <div class="action-icon">&#x1f5d1;&#xfe0f;</div>
+        <div class="action-label">Deprovision</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ────────────────────────────────────────────────────────── -->
+<!-- SCREEN: DAMAGE REPORT                                      -->
+<!-- ────────────────────────────────────────────────────────── -->
+<div class="screen" id="screen-damage">
+  <div class="scroll">
+
+    <div class="kvcard">
+      <div class="kvrow">
+        <div class="kvkey">Device</div>
+        <div class="kvval mono">5CD3125ABC</div>
+      </div>
+      <div class="kvrow">
+        <div class="kvkey">Assigned</div>
+        <div class="kvval">Jordan Bishop</div>
+      </div>
+    </div>
+
+    <div class="sec"><div class="sec-lbl">Damage Type</div><div class="sec-line"></div></div>
+    <div class="flag-pills" id="damage-types" style="padding:0 4px">
+      <button class="flag-pill" onclick="pickDamage(this)">Screen</button>
+      <button class="flag-pill" onclick="pickDamage(this)">Keyboard</button>
+      <button class="flag-pill" onclick="pickDamage(this)">Touchpad</button>
+      <button class="flag-pill" onclick="pickDamage(this)">Hinge</button>
+      <button class="flag-pill" onclick="pickDamage(this)">Port</button>
+      <button class="flag-pill" onclick="pickDamage(this)">Battery</button>
+      <button class="flag-pill" onclick="pickDamage(this)">Liquid</button>
+      <button class="flag-pill" onclick="pickDamage(this)">Other</button>
+    </div>
+
+    <div class="sec"><div class="sec-lbl">Photos</div><div class="sec-line"></div></div>
+    <div class="photo-block">
+      <div class="photo-grid">
+        <div class="photo-thumb">&#x1f4f7;</div>
+        <div class="photo-thumb">&#x1f4f7;</div>
+        <button class="photo-add" onclick="toast('Camera opens here (native picker)', 'info')">+</button>
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);text-align:center">2 photos attached &middot; tap + to take another</div>
+    </div>
+
+    <div class="sec"><div class="sec-lbl">Description</div><div class="sec-line"></div></div>
+    <div class="kvcard">
+      <div class="kvrow">
+        <div class="inline-edit" style="margin-top:0">
+          <input type="text" placeholder="e.g. screen cracked corner to corner, won't boot">
+        </div>
+      </div>
+    </div>
+
+    <div class="sec"><div class="sec-lbl">Responsible Party</div><div class="sec-line"></div></div>
+    <div class="action-list">
+      <div class="action-row" onclick="pickResponsible(this, 'assigned')">
+        <div class="action-icon">&#x1f464;</div>
+        <div class="action-label">Assigned user (Jordan Bishop)</div>
+        <div class="action-chev" id="resp-assigned-chk">&#x2713;</div>
+      </div>
+      <div class="action-row" onclick="pickResponsible(this, 'other')">
+        <div class="action-icon">&#x1f50d;</div>
+        <div class="action-label">Different user</div>
+        <div class="action-chev" id="resp-other-chk"></div>
+      </div>
+      <div class="action-row" onclick="pickResponsible(this, 'unknown')">
+        <div class="action-icon">&#x2753;</div>
+        <div class="action-label">Unknown / no fault</div>
+        <div class="action-chev" id="resp-unknown-chk"></div>
+      </div>
+    </div>
+
+    <div class="divider-note">A repair ticket will be created and attached to this device.</div>
+
+    <button class="btn primary" onclick="submitDamage()">Submit Damage Report</button>
+  </div>
+</div>
+
+<!-- ────────────────────────────────────────────────────────── -->
+<!-- SCREEN: BULK MODE                                          -->
+<!-- ────────────────────────────────────────────────────────── -->
+<div class="screen" id="screen-bulk">
+  <div class="scroll">
+
+    <!-- Compact persistent viewfinder — tap header to collapse -->
+    <div class="bulk-vf-wrap">
+      <div class="bulk-vf-header" onclick="toggleBulkVf()">
+        <span class="bulk-vf-icon">&#x1f4f7;</span>
+        <span class="bulk-vf-title">Scanner</span>
+        <span class="bulk-vf-state" id="bulk-vf-state">Active</span>
+        <span class="bulk-vf-chev" id="bulk-vf-chev">&#x25bc;</span>
+      </div>
+      <div class="bulk-viewfinder" id="bulk-viewfinder">
+        <div class="bulk-corner tl"></div><div class="bulk-corner tr"></div>
+        <div class="bulk-corner bl"></div><div class="bulk-corner br"></div>
+        <div class="bulk-scanline"></div>
+      </div>
+    </div>
+
+    <div class="bulk-count"><strong id="bulk-n">3</strong>scanned &middot; tap viewfinder to fake-scan another</div>
+
+    <div class="sec"><div class="sec-lbl">Scanned</div><div class="sec-line"></div><div class="sec-ct" id="bulk-ct">3</div></div>
+    <div class="bulk-rows" id="bulk-list">
+      <div class="bulk-row">
+        <div class="bulk-row-num">1</div>
+        <div class="bulk-row-info">
+          <div class="bulk-row-serial">5CD3125ABC</div>
+          <div class="bulk-row-user">Jordan Bishop &middot; PES G6</div>
+        </div>
+        <button class="bulk-row-del">&times;</button>
+      </div>
+      <div class="bulk-row">
+        <div class="bulk-row-num">2</div>
+        <div class="bulk-row-info">
+          <div class="bulk-row-serial">5CD3095DEF</div>
+          <div class="bulk-row-user">Alex Fernandez &middot; PES G5</div>
+        </div>
+        <button class="bulk-row-del">&times;</button>
+      </div>
+      <div class="bulk-row">
+        <div class="bulk-row-num">3</div>
+        <div class="bulk-row-info">
+          <div class="bulk-row-serial">5CD3211GHI</div>
+          <div class="bulk-row-user">Unassigned &middot; /Deployed/PES</div>
+        </div>
+        <button class="bulk-row-del">&times;</button>
+      </div>
+    </div>
+
+    <!-- ── Asset tagging with sequential numbering ─────────── -->
+    <div class="sec"><div class="sec-lbl">Asset Tagging</div><div class="sec-line"></div></div>
+    <div class="kvcard">
+      <div class="kvrow" style="padding:10px 14px">
+        <div class="kvkey">Prefix</div>
+        <div class="inline-edit" style="margin-top:0">
+          <input type="text" value="CB-" id="bulk-prefix" oninput="updateBulkPreview()">
+        </div>
+      </div>
+      <div class="kvrow" style="padding:10px 14px">
+        <div class="kvkey">Start #</div>
+        <div class="inline-edit" style="margin-top:0">
+          <input type="number" value="1" min="1" id="bulk-start" oninput="updateBulkPreview()">
+        </div>
+      </div>
+      <div class="kvrow" style="padding:10px 14px">
+        <div class="kvkey">Digits</div>
+        <div class="inline-edit" style="margin-top:0">
+          <input type="number" value="2" min="1" max="6" id="bulk-digits" oninput="updateBulkPreview()">
+        </div>
+      </div>
+      <div class="kvrow" style="padding:10px 14px;background:var(--surface2)">
+        <div class="kvkey">Preview</div>
+        <div class="kvval mono" id="bulk-preview">CB-01 → CB-03</div>
+      </div>
+    </div>
+    <button class="btn primary" style="margin-bottom:14px" onclick="toast('Assigned asset tags to 3 devices', 'ok')">
+      Assign Asset Tags
+    </button>
+
+    <!-- ── Batch metadata ──────────────────────────────────── -->
+    <div class="sec"><div class="sec-lbl">Batch Info</div><div class="sec-line"></div></div>
+    <div class="kvcard">
+      <div class="kvrow" style="padding:10px 14px">
+        <div class="kvkey">Building</div>
+        <div class="inline-edit" style="margin-top:0">
+          <input type="text" placeholder="e.g. PES" value="PES">
+        </div>
+      </div>
+      <div class="kvrow" style="padding:10px 14px">
+        <div class="kvkey">Room</div>
+        <div class="inline-edit" style="margin-top:0">
+          <input type="text" placeholder="e.g. Room 204">
+        </div>
+      </div>
+      <div class="kvrow clickable" onclick="openSheet('ou')">
+        <div class="kvkey">Target OU</div>
+        <div class="kvval" id="bulk-ou-label"><span class="muted">Tap to pick…</span></div>
+        <div class="kvedit">&rsaquo;</div>
+      </div>
+      <div class="kvrow" style="padding:10px 14px">
+        <div class="kvkey">Batch Name</div>
+        <div class="inline-edit" style="margin-top:0">
+          <input type="text" placeholder="e.g. PES Room 204 Cart 3">
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Labeling & output ───────────────────────────────── -->
+    <div class="sec"><div class="sec-lbl">Labeling & Output</div><div class="sec-line"></div></div>
+    <div class="action-list">
+      <div class="action-row" onclick="toast('Queued 3 labels → Brother QL', 'ok')">
+        <div class="action-icon">&#x1f3f7;&#xfe0f;</div>
+        <div class="action-label">Print Labels</div>
+        <div class="action-sub">Brother QL</div>
+        <div class="action-chev">&rsaquo;</div>
+      </div>
+      <div class="action-row" onclick="toast('Manifest PDF generated', 'ok')">
+        <div class="action-icon">&#x1f4c4;</div>
+        <div class="action-label">Print Manifest</div>
+        <div class="action-sub">PDF export</div>
+        <div class="action-chev">&rsaquo;</div>
+      </div>
+      <div class="action-row" onclick="toast('Batch saved', 'ok')">
+        <div class="action-icon">&#x1f4be;</div>
+        <div class="action-label">Save Batch</div>
+        <div class="action-chev">&rsaquo;</div>
+      </div>
+      <div class="action-row" onclick="openSheet('saved')">
+        <div class="action-icon">&#x1f4c2;</div>
+        <div class="action-label">Load Saved Batch</div>
+        <div class="action-sub">4 saved</div>
+        <div class="action-chev">&rsaquo;</div>
+      </div>
+    </div>
+
+    <!-- ── Lifecycle actions ───────────────────────────────── -->
+    <div class="sec"><div class="sec-lbl">Lifecycle (all scanned)</div><div class="sec-line"></div></div>
+    <div class="action-list">
+      <div class="action-row" onclick="openSheet('ou')">
+        <div class="action-icon">&#x1f4c1;</div>
+        <div class="action-label">Move to OU</div>
+        <div class="action-chev">&rsaquo;</div>
+      </div>
+      <div class="action-row go" onclick="confirmBulk('Enable 3 devices?', 'Enabled 3 devices')">
+        <div class="action-icon">&#x25b6;&#xfe0f;</div>
+        <div class="action-label">Enable All</div>
+      </div>
+      <div class="action-row warn" onclick="confirmBulk('Disable 3 devices?', 'Disabled 3 devices')">
+        <div class="action-icon">&#x23f8;&#xfe0f;</div>
+        <div class="action-label">Disable All</div>
+      </div>
+      <div class="action-row danger" onclick="confirmBulk('Deprovision 3 devices? Irreversible.', 'Deprovisioned 3 devices')">
+        <div class="action-icon">&#x1f5d1;&#xfe0f;</div>
+        <div class="action-label">Deprovision All</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ────────────────────────────────────────────────────────── -->
+<!-- BOTTOM SHEETS                                              -->
+<!-- ────────────────────────────────────────────────────────── -->
+
+<!-- OU picker -->
+<div class="sheet-overlay" id="sheet-ou" onclick="if(event.target===this)closeSheet()">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">Move to OU</div>
+    <div class="sheet-search">
+      <input type="text" placeholder="Search OU…">
+    </div>
+    <div class="sheet-body">
+      <div class="sheet-item" onclick="pickSheet('OU', '/PES/Student/Grade 6')">
+        <div class="sheet-item-icon">&#x1f4c1;</div>
+        <div class="sheet-item-info">
+          <div class="sheet-item-name">/PES/Student/Grade 6</div>
+          <div class="sheet-item-sub">current</div>
+        </div>
+      </div>
+      <div class="sheet-item" onclick="pickSheet('OU', '/PES/Student/Grade 5')">
+        <div class="sheet-item-icon">&#x1f4c1;</div>
+        <div class="sheet-item-info"><div class="sheet-item-name">/PES/Student/Grade 5</div></div>
+      </div>
+      <div class="sheet-item" onclick="pickSheet('OU', '/PES/Student/Grade 4')">
+        <div class="sheet-item-icon">&#x1f4c1;</div>
+        <div class="sheet-item-info"><div class="sheet-item-name">/PES/Student/Grade 4</div></div>
+      </div>
+      <div class="sheet-item" onclick="pickSheet('OU', '/PES/Staff')">
+        <div class="sheet-item-icon">&#x1f4c1;</div>
+        <div class="sheet-item-info"><div class="sheet-item-name">/PES/Staff</div></div>
+      </div>
+      <div class="sheet-item" onclick="pickSheet('OU', '/Deployed/PES')">
+        <div class="sheet-item-icon">&#x1f4c1;</div>
+        <div class="sheet-item-info"><div class="sheet-item-name">/Deployed/PES</div></div>
+      </div>
+      <div class="sheet-item" onclick="pickSheet('OU', '/Repair')">
+        <div class="sheet-item-icon">&#x1f4c1;</div>
+        <div class="sheet-item-info">
+          <div class="sheet-item-name">/Repair</div>
+          <div class="sheet-item-sub">disables sign-in</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Saved batches -->
+<div class="sheet-overlay" id="sheet-saved" onclick="if(event.target===this)closeSheet()">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">Saved Batches</div>
+    <div class="sheet-body">
+      <div class="sheet-item" onclick="pickSheet('Loaded batch', 'PES Room 204 — Cart 3 (32)')">
+        <div class="sheet-item-icon">&#x1f4c2;</div>
+        <div class="sheet-item-info">
+          <div class="sheet-item-name">PES Room 204 — Cart 3</div>
+          <div class="sheet-item-sub">32 devices · created 2026-03-18</div>
+        </div>
+      </div>
+      <div class="sheet-item" onclick="pickSheet('Loaded batch', 'PHS Cart 7 (30)')">
+        <div class="sheet-item-icon">&#x1f4c2;</div>
+        <div class="sheet-item-info">
+          <div class="sheet-item-name">PHS Cart 7</div>
+          <div class="sheet-item-sub">30 devices · created 2026-02-09</div>
+        </div>
+      </div>
+      <div class="sheet-item" onclick="pickSheet('Loaded batch', 'EPE K-2 pool (18)')">
+        <div class="sheet-item-icon">&#x1f4c2;</div>
+        <div class="sheet-item-info">
+          <div class="sheet-item-name">EPE K-2 pool</div>
+          <div class="sheet-item-sub">18 devices · created 2025-12-03</div>
+        </div>
+      </div>
+      <div class="sheet-item" onclick="pickSheet('Loaded batch', 'MAINT spares (6)')">
+        <div class="sheet-item-icon">&#x1f4c2;</div>
+        <div class="sheet-item-info">
+          <div class="sheet-item-name">MAINT spares</div>
+          <div class="sheet-item-sub">6 devices · created 2025-11-21</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- User picker -->
+<div class="sheet-overlay" id="sheet-user" onclick="if(event.target===this)closeSheet()">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">Assign User</div>
+    <div class="sheet-search">
+      <input type="text" placeholder="Search name or email…">
+    </div>
+    <div class="sheet-body">
+      <div class="sheet-item" onclick="pickSheet('User', 'Jordan Bishop')">
+        <div class="sheet-item-icon">&#x1f464;</div>
+        <div class="sheet-item-info">
+          <div class="sheet-item-name">Jordan Bishop</div>
+          <div class="sheet-item-sub">jordan.bishop@students.pcs.net · Gr 6 PES</div>
+        </div>
+      </div>
+      <div class="sheet-item" onclick="pickSheet('User', 'Jordan Banks')">
+        <div class="sheet-item-icon">&#x1f464;</div>
+        <div class="sheet-item-info">
+          <div class="sheet-item-name">Jordan Banks</div>
+          <div class="sheet-item-sub">jordan.banks@students.pcs.net · Gr 4 PES</div>
+        </div>
+      </div>
+      <div class="sheet-item" onclick="pickSheet('User', 'Unassigned')">
+        <div class="sheet-item-icon">&#x2715;</div>
+        <div class="sheet-item-info">
+          <div class="sheet-item-name">Unassigned</div>
+          <div class="sheet-item-sub">remove user from device</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ────────────────────────────────────────────────────────── -->
+<!-- SCANNER OVERLAY (fake)                                     -->
+<!-- ────────────────────────────────────────────────────────── -->
+<div class="scanner-overlay" id="scanner-overlay">
+  <div style="font-size:11px;color:var(--text-muted);font-family:var(--mono);text-align:center">SCAN BARCODE</div>
+  <div class="scanner-frame">
+    <div class="scanner-corners">
+      <div class="bulk-corner tl"></div><div class="bulk-corner tr"></div>
+      <div class="bulk-corner bl"></div><div class="bulk-corner br"></div>
+    </div>
+    <div class="bulk-scanline"></div>
+  </div>
+  <div class="scanner-hint">TAP FRAME TO FAKE-SCAN A DEVICE</div>
+  <button class="scanner-close" onclick="closeScanner()">Cancel</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const screens = ['root', 'detail', 'damage', 'bulk'];
+const history = ['root'];
+
+function show(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + name).classList.add('active');
+  updTopbar(name);
+}
+
+function updTopbar(name) {
+  const back = document.getElementById('tb-back');
+  const title = document.getElementById('tb-title');
+  const sub = document.getElementById('tb-sub');
+  const bulk = document.getElementById('tb-bulk');
+  if (name === 'root') {
+    back.style.display = 'none';
+    title.textContent = 'Chromebooks';
+    sub.textContent = 'MOCKUP · TROJAN NEXUS';
+    bulk.classList.remove('active');
+  } else if (name === 'detail') {
+    back.style.display = 'flex';
+    title.textContent = '5CD3125ABC';
+    sub.textContent = 'HP CB 11 G8 · PES-2138';
+    bulk.classList.remove('active');
+  } else if (name === 'damage') {
+    back.style.display = 'flex';
+    title.textContent = 'Damage Report';
+    sub.textContent = '5CD3125ABC';
+    bulk.classList.remove('active');
+  } else if (name === 'bulk') {
+    back.style.display = 'flex';
+    title.textContent = 'Bulk Scan Mode';
+    sub.textContent = document.getElementById('bulk-n').textContent + ' SCANNED';
+    bulk.classList.add('active');
+  }
+}
+
+function goBack() {
+  history.pop();
+  const prev = history[history.length - 1] || 'root';
+  show(prev);
+}
+
+function go(name) {
+  history.push(name);
+  show(name);
+}
+
+function toggleBulkHeader() { go('bulk'); }
+function openBulkMode() { go('bulk'); }
+function openDamageReport() { go('damage'); }
+function submitDamage() {
+  toast('Damage report submitted ✓', 'ok');
+  goBack();
+}
+
+function openScanner() {
+  document.getElementById('scanner-overlay').classList.add('open');
+}
+function closeScanner() {
+  document.getElementById('scanner-overlay').classList.remove('open');
+}
+
+// Fake scan → jump to detail
+document.querySelector('.scanner-frame').addEventListener('click', () => {
+  closeScanner();
+  toast('Scanned 5CD3125ABC', 'ok');
+  setTimeout(() => go('detail'), 120);
+});
+
+// Fake-scan in bulk mode: bump the count + refresh preview so the
+// workflow demo feels live.
+document.addEventListener('click', (ev) => {
+  if (ev.target.closest('.bulk-viewfinder')) {
+    const el = document.getElementById('bulk-n');
+    const n = (parseInt(el.textContent, 10) || 0) + 1;
+    el.textContent = String(n);
+    const ct = document.getElementById('bulk-ct');
+    if (ct) ct.textContent = String(n);
+    updateBulkPreview();
+    toast(`Scanned +1  (${n} total)`, 'ok');
+  }
+});
+
+// Fake search — after 2 chars, drop a few result cards; tapping
+// one navigates to the single device screen. Mirrors what the
+// real mobile JS will do once it's wired to /api/chromebook/devices.
+const FAKE_RESULTS = [
+  { serial: '5CD3125ABC', model: 'HP CB 11 G8 EE', user: 'Jordan Bishop', sub: 'PES G6 · asset PES-2138', status: 'ok' },
+  { serial: '5CD3095DEF', model: 'HP CB 11 G8 EE', user: 'Alex Fernandez', sub: 'PES G5 · asset PES-2094', status: 'ok' },
+  { serial: '5CD3211GHI', model: 'HP CB 14 G6',    user: 'unassigned',    sub: '/Deployed/PES · asset PES-2211', status: 'muted' },
+  { serial: '5CD2978JKL', model: 'HP CB 11 G7',    user: 'Kylie Harper',  sub: 'EPE G3 · asset EPE-1978', status: 'warn' },
+];
+
+function simulateSearch(v) {
+  const q = (v || '').trim().toLowerCase();
+  const out = document.getElementById('root-results');
+  if (q.length < 2) {
+    out.style.display = 'none';
+    out.innerHTML = '';
+    return;
+  }
+  const hits = FAKE_RESULTS.filter(r =>
+    r.serial.toLowerCase().includes(q) ||
+    r.user.toLowerCase().includes(q) ||
+    r.sub.toLowerCase().includes(q) ||
+    r.model.toLowerCase().includes(q)
+  );
+  if (!hits.length) {
+    out.innerHTML = '<div class="root-hint" style="text-align:center;padding:16px">No matches</div>';
+    out.style.display = '';
+    return;
+  }
+  out.innerHTML = `
+    <div class="sec"><div class="sec-lbl">Results</div><div class="sec-line"></div><div class="sec-ct">${hits.length}</div></div>
+    <div class="bulk-rows">
+      ${hits.map(h => `
+        <div class="bulk-row" onclick="go('detail')" style="cursor:pointer">
+          <div class="bulk-row-info">
+            <div class="bulk-row-serial">${h.serial}</div>
+            <div class="bulk-row-user">${h.user} · ${h.sub}</div>
+          </div>
+          <span class="badge ${h.status}" style="margin-right:4px">
+            ${h.status === 'ok' ? 'Active' : h.status === 'warn' ? 'Stale' : h.status === 'muted' ? 'Unassigned' : ''}
+          </span>
+          <span style="color:var(--text-muted);font-size:14px">&rsaquo;</span>
+        </div>
+      `).join('')}
+    </div>
+  `;
+  out.style.display = '';
+}
+
+function openSheet(kind) {
+  document.getElementById('sheet-' + kind).classList.add('open');
+}
+function closeSheet() {
+  document.querySelectorAll('.sheet-overlay').forEach(s => s.classList.remove('open'));
+}
+function pickSheet(kind, value) {
+  closeSheet();
+  toast(`${kind} → ${value}`, 'ok');
+}
+
+function inlineEdit(key) {
+  document.getElementById('row-' + key + '-edit').style.display = '';
+  document.getElementById('input-' + key).focus();
+}
+function cancelInline(key) {
+  document.getElementById('row-' + key + '-edit').style.display = 'none';
+}
+function saveInline(key, msg) {
+  document.getElementById('row-' + key + '-edit').style.display = 'none';
+  toast(msg, 'ok');
+}
+
+function setFlag(el, kind, msg) {
+  document.querySelectorAll('.flag-pill').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  toast(msg, 'info');
+}
+function clearFlags() {
+  document.querySelectorAll('.flag-pill').forEach(p => p.classList.remove('active'));
+  toast('Flag cleared', 'ok');
+}
+
+function pickDamage(el) {
+  el.classList.toggle('active');
+  el.classList.toggle('inv');
+}
+
+function pickResponsible(row, kind) {
+  ['assigned', 'other', 'unknown'].forEach(k => {
+    document.getElementById('resp-' + k + '-chk').textContent = k === kind ? '✓' : '';
+  });
+  if (kind === 'other') {
+    setTimeout(() => openSheet('user'), 150);
+  }
+}
+
+function confirmAction(msg, okMsg) {
+  if (confirm(msg)) toast(okMsg, 'warn');
+}
+function confirmBulk(msg, okMsg) {
+  if (confirm(msg)) toast(okMsg, 'warn');
+}
+
+// Bulk mode: collapse the viewfinder so the batch tools fit above
+// the fold once the user has enough scanned. Matches what you'd
+// want mid-batch — you're not actively scanning anymore, you're
+// assigning tags or printing.
+function toggleBulkVf() {
+  document.querySelector('.bulk-vf-wrap').classList.toggle('collapsed');
+}
+
+// Asset tag preview — show the first and last generated tag
+// given the current prefix/start/digits and the scanned count.
+function updateBulkPreview() {
+  const prefix = document.getElementById('bulk-prefix').value;
+  const start = parseInt(document.getElementById('bulk-start').value, 10) || 1;
+  const digits = Math.max(1, Math.min(6, parseInt(document.getElementById('bulk-digits').value, 10) || 2));
+  const count = parseInt(document.getElementById('bulk-n').textContent, 10) || 0;
+  const pad = n => String(n).padStart(digits, '0');
+  const first = prefix + pad(start);
+  const last = count > 1 ? prefix + pad(start + count - 1) : null;
+  document.getElementById('bulk-preview').textContent = last ? `${first} → ${last}` : first;
+}
+
+let toastTimer;
+function toast(msg, kind) {
+  const t = document.getElementById('toast');
+  t.className = 'toast';
+  if (kind) t.classList.add(kind);
+  t.textContent = msg;
+  void t.offsetWidth;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+</script>
+</body>
+</html>

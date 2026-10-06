@@ -1,0 +1,300 @@
+{% extends "_base.html" %}
+{% block title %}Device Categories{% endblock %}
+{% block page_css %}
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; font-size: 14px; min-height: 100vh; }
+.content { max-width: 1400px; margin: 24px auto; padding: 0 24px; }
+.page-title { font-size: 18px; font-weight: 600; margin-bottom: 6px; }
+.subtitle { color: var(--text-muted); font-size: 12px; margin-bottom: 20px; }
+.subtitle code { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; background: var(--surface2); padding: 1px 5px; border-radius: 3px; }
+
+.actions-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; }
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: var(--surface2); color: var(--text); text-decoration: none; }
+.btn:hover { background: var(--border); }
+.btn-primary { background: var(--accent-dim); border-color: var(--accent); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn.danger { color: var(--red); }
+
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 20px; overflow: hidden; }
+.panel-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.panel-header h2 { font-size: 14px; font-weight: 600; margin: 0; }
+.panel-body { padding: 16px; }
+
+.data-table { width: 100%; border-collapse: collapse; }
+.data-table th { text-align: left; padding: 8px 12px; font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border); background: var(--surface2); white-space: nowrap; }
+.data-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; font-size: 13px; }
+.data-table tr:last-child td { border-bottom: none; }
+.data-table td.mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
+.icon-cell svg { width: 28px; height: 28px; color: var(--accent); }
+.badge { display: inline-block; padding: 1px 8px; border-radius: 3px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
+.badge.builtin { background: rgba(125,133,144,0.15); color: var(--text-muted); }
+.badge.custom { background: rgba(88,166,255,0.15); color: var(--accent); }
+.chip { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 10px; background: var(--surface2); border: 1px solid var(--border); margin: 1px 3px 1px 0; font-family: 'SF Mono', 'Fira Code', monospace; }
+
+/* Modal */
+.overlay { display: none; position: fixed; inset: 0; background: rgba(2,12,34,0.85); z-index: 100; overflow-y: auto; padding: 40px 20px; }
+.overlay.active { display: flex; justify-content: center; align-items: flex-start; }
+.modal { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; max-width: 720px; width: 100%; }
+.modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.modal-header h2 { margin: 0; font-size: 16px; font-weight: 600; }
+.form-field { margin-bottom: 14px; }
+.form-field label { display: block; font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+.form-field input, .form-field textarea {
+    width: 100%; background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+    padding: 7px 10px; border-radius: 5px; font-size: 13px; font-family: inherit;
+}
+.form-field textarea { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; min-height: 90px; resize: vertical; }
+.form-field .hint { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+.form-field .hint code { font-family: 'SF Mono', 'Fira Code', monospace; background: var(--surface2); padding: 1px 4px; border-radius: 3px; }
+.icon-preview { display: inline-block; padding: 8px; background: var(--surface2); border: 1px dashed var(--border); border-radius: 4px; vertical-align: middle; margin-left: 8px; }
+.icon-preview svg { width: 32px; height: 32px; color: var(--accent); vertical-align: middle; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="content">
+
+<h1 class="page-title">Device Categories</h1>
+<div class="subtitle">
+    Manage the device categories that appear on the switch profile page. Builtin
+    categories are baked into the app and can't be edited or deleted; custom ones
+    live in <code>device_kind_definitions</code> and take effect within 60 seconds
+    of save.
+    <br><br>
+    Icon SVGs — grab from <a href="https://pictogrammers.com/library/mdi/" target="_blank" style="color:var(--accent);text-decoration:none">Material Design Icons</a>: click an icon → "Advanced" → copy the SVG. Paste the whole <code>&lt;svg&gt;...&lt;/svg&gt;</code> string.
+</div>
+
+<div class="actions-bar">
+    <a class="btn" href="/settings">&larr; Back to Settings</a>
+    <button id="btn-add" class="btn btn-primary">+ Add Category</button>
+</div>
+
+<div class="panel">
+    <div class="panel-header">
+        <h2>All categories</h2>
+        <span id="count-label" style="font-size:11px;color:var(--text-muted)"></span>
+    </div>
+    <table class="data-table" id="tbl-kinds">
+        <thead>
+            <tr>
+                <th>Icon</th>
+                <th>Key</th>
+                <th>Label</th>
+                <th>OUI Prefixes</th>
+                <th>MFR Patterns</th>
+                <th>Type</th>
+                <th style="width:160px">Actions</th>
+            </tr>
+        </thead>
+        <tbody><tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:24px">Loading…</td></tr></tbody>
+    </table>
+</div>
+
+<!-- Modal -->
+<div id="modal" class="overlay">
+    <div class="modal">
+        <div class="modal-header">
+            <h2 id="modal-title">Add Category</h2>
+            <button class="btn" id="btn-close">×</button>
+        </div>
+        <form id="modal-form">
+            <div class="form-field">
+                <label for="f-kind">Key</label>
+                <input id="f-kind" required minlength="2" maxlength="30" pattern="[a-z0-9_\-]+"
+                       placeholder="e.g. thermostat, iot, kiosk">
+                <div class="hint">Short lowercase identifier. Letters, numbers, dash, underscore. Cannot match a builtin.</div>
+            </div>
+            <div class="form-field">
+                <label for="f-label">Display label</label>
+                <input id="f-label" required maxlength="100" placeholder="e.g. Thermostat">
+            </div>
+            <div class="form-field">
+                <label for="f-icon">Icon SVG</label>
+                <textarea id="f-icon" required placeholder='<svg viewBox="0 0 24 24" fill="currentColor"><path d="..."/></svg>'></textarea>
+                <div class="hint">
+                    Preview: <span id="icon-preview" class="icon-preview" style="display:none"></span>
+                    <br>Must start with <code>&lt;svg</code>. No <code>&lt;script&gt;</code> or event handlers.
+                </div>
+            </div>
+            <div class="form-field">
+                <label for="f-ouis">OUI prefixes (comma-separated, 6 hex chars each)</label>
+                <input id="f-ouis" placeholder="B0A737, AC3A7A, CC6DA0">
+                <div class="hint">Optional. Match on the first 6 chars of a device MAC (no colons).</div>
+            </div>
+            <div class="form-field">
+                <label for="f-mfrs">Manufacturer name patterns (comma-separated)</label>
+                <input id="f-mfrs" placeholder="ecobee, nest, honeywell home">
+                <div class="hint">Optional. Case-insensitive substring match against OUI-registry manufacturer name.</div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center">
+                <button type="submit" class="btn btn-primary">Save</button>
+                <span id="form-status" style="font-size:12px;color:var(--text-muted)"></span>
+            </div>
+        </form>
+    </div>
+</div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ request.state.csp_nonce }}">
+(function () {
+    const HP = { 'X-Requested-With': 'CommandNexus', 'Content-Type': 'application/json' };
+    let _editing = null;   // kind key being edited, null when adding
+
+    async function fetchJSON(url, opts) {
+        const r = await fetch(url, Object.assign({ credentials: 'same-origin' }, opts || {}));
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(j.detail || (r.status + ' ' + r.statusText));
+        return j;
+    }
+    function esc(s) {
+        return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+    }
+    function sanitizeSvgForPreview(svg) {
+        // Cheap preview sanitize — the server does real validation on save.
+        // Just guard the preview iframe-in-innerHTML from surprises.
+        if (!svg || !svg.trim().toLowerCase().startsWith('<svg')) return '';
+        if (/<script|onload=|onclick=|onerror=|<iframe|javascript:/i.test(svg)) return '';
+        return svg;
+    }
+
+    async function load() {
+        const tbody = document.querySelector('#tbl-kinds tbody');
+        try {
+            const data = await fetchJSON('/api/network/device-kinds');
+            const rows = [];
+            for (const b of (data.builtin || [])) {
+                rows.push({ ...b, is_builtin: true });
+            }
+            for (const c of (data.custom || [])) {
+                rows.push({ ...c, is_builtin: false });
+            }
+            document.getElementById('count-label').textContent =
+                (data.builtin || []).length + ' builtin, ' + (data.custom || []).length + ' custom';
+            tbody.innerHTML = '';
+            for (const r of rows) {
+                const tr = document.createElement('tr');
+                const ouis = (r.oui_prefixes || []).map(p => `<span class="chip">${esc(p)}</span>`).join('') || '<span style="color:var(--text-muted)">—</span>';
+                const mfrs = (r.mfr_patterns || []).map(p => `<span class="chip">${esc(p)}</span>`).join('') || '<span style="color:var(--text-muted)">—</span>';
+                const iconHtml = r.icon_svg
+                    ? `<div class="icon-cell">${sanitizeSvgForPreview(r.icon_svg)}</div>`
+                    : '<span style="color:var(--text-muted);font-size:11px">(built into template)</span>';
+                const actions = r.is_builtin
+                    ? '<span style="color:var(--text-muted);font-size:12px">read-only</span>'
+                    : `<button data-edit="${r.kind}" class="btn" style="padding:4px 10px;font-size:12px">Edit</button>
+                       <button data-delete="${r.kind}" class="btn danger" style="padding:4px 10px;font-size:12px">Delete</button>`;
+                tr.innerHTML = `
+                    <td>${iconHtml}</td>
+                    <td class="mono">${esc(r.kind)}</td>
+                    <td>${esc(r.label)}</td>
+                    <td>${ouis}</td>
+                    <td>${mfrs}</td>
+                    <td><span class="badge ${r.is_builtin ? 'builtin' : 'custom'}">${r.is_builtin ? 'Built-in' : 'Custom'}</span></td>
+                    <td>${actions}</td>
+                `;
+                tbody.appendChild(tr);
+            }
+        } catch (e) {
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--red);padding:24px">${esc(e.message)}</td></tr>`;
+        }
+    }
+
+    function openModal(editing) {
+        _editing = editing || null;
+        document.getElementById('modal-title').textContent = editing ? `Edit: ${editing.kind}` : 'Add Category';
+        document.getElementById('f-kind').value = editing ? editing.kind : '';
+        document.getElementById('f-kind').readOnly = !!editing;
+        document.getElementById('f-label').value = editing ? editing.label : '';
+        document.getElementById('f-icon').value = editing ? editing.icon_svg : '';
+        document.getElementById('f-ouis').value = editing ? (editing.oui_prefixes || []).join(', ') : '';
+        document.getElementById('f-mfrs').value = editing ? (editing.mfr_patterns || []).join(', ') : '';
+        document.getElementById('form-status').textContent = '';
+        updatePreview();
+        document.getElementById('modal').classList.add('active');
+    }
+    function closeModal() {
+        document.getElementById('modal').classList.remove('active');
+        _editing = null;
+    }
+    function updatePreview() {
+        const svg = document.getElementById('f-icon').value;
+        const wrap = document.getElementById('icon-preview');
+        const clean = sanitizeSvgForPreview(svg);
+        if (clean) {
+            wrap.innerHTML = clean;
+            wrap.style.display = 'inline-block';
+        } else {
+            wrap.style.display = 'none';
+        }
+    }
+    document.getElementById('f-icon').addEventListener('input', updatePreview);
+
+    document.getElementById('btn-add').addEventListener('click', () => openModal(null));
+    document.getElementById('btn-close').addEventListener('click', closeModal);
+    document.getElementById('modal').addEventListener('click', e => {
+        if (e.target === document.getElementById('modal')) closeModal();
+    });
+
+    document.getElementById('modal-form').addEventListener('submit', async function (e) {
+        e.preventDefault();
+        const status = document.getElementById('form-status');
+        const body = {
+            kind: document.getElementById('f-kind').value.trim().toLowerCase(),
+            label: document.getElementById('f-label').value.trim(),
+            icon_svg: document.getElementById('f-icon').value,
+            oui_prefixes: document.getElementById('f-ouis').value.split(',').map(s => s.trim()).filter(Boolean),
+            mfr_patterns: document.getElementById('f-mfrs').value.split(',').map(s => s.trim()).filter(Boolean),
+        };
+        status.textContent = 'Saving…';
+        try {
+            if (_editing) {
+                const patch = {
+                    label: body.label,
+                    icon_svg: body.icon_svg,
+                    oui_prefixes: body.oui_prefixes,
+                    mfr_patterns: body.mfr_patterns,
+                };
+                await fetchJSON('/api/network/device-kinds/' + encodeURIComponent(_editing.kind), {
+                    method: 'PUT', headers: HP, body: JSON.stringify(patch),
+                });
+            } else {
+                await fetchJSON('/api/network/device-kinds', {
+                    method: 'POST', headers: HP, body: JSON.stringify(body),
+                });
+            }
+            status.textContent = 'Saved.';
+            setTimeout(closeModal, 500);
+            await load();
+        } catch (err) {
+            status.textContent = 'Error: ' + err.message;
+            status.style.color = 'var(--red)';
+        }
+    });
+
+    document.addEventListener('click', async function (e) {
+        const t = e.target;
+        if (t.dataset.edit) {
+            try {
+                const data = await fetchJSON('/api/network/device-kinds');
+                const row = (data.custom || []).find(r => r.kind === t.dataset.edit);
+                if (row) openModal(row);
+            } catch (err) { alert('Load failed: ' + err.message); }
+        } else if (t.dataset.delete) {
+            const kind = t.dataset.delete;
+            if (!confirm(`Delete category "${kind}"? Any port classified as this kind will fall back to "unknown".`)) return;
+            try {
+                await fetchJSON('/api/network/device-kinds/' + encodeURIComponent(kind), {
+                    method: 'DELETE', headers: HP,
+                });
+                await load();
+            } catch (err) { alert('Delete failed: ' + err.message); }
+        }
+    });
+
+    load();
+})();
+</script>
+{% endblock %}

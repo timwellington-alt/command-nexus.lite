@@ -1,0 +1,54 @@
+{# Base page template — every content page extends this.
+
+   Structure:
+     <head>
+       standard meta + favicons + manifest
+       mobile.css + _shell.css (always loaded)
+       {% block page_css %}         — per-page <style> or extra <link>s
+       {% block head_extra %}       — anything else that must sit inside <head>
+       <title>{% block title %}{% endblock %} — Command Nexus</title>
+     <body class="{% block body_class %}{% endblock %}">
+       {% include "_page_header.html" %}  (logo + top nav + user area)
+       {% block content %}{% endblock %}  — the page's actual body
+       document.title branding rewrite     (CSP-nonced)
+       {% block scripts %}{% endblock %}   — per-page JS
+       mobile.js + _mobile_nav.html
+
+   Pages replace their entire <html>…</html> shell with:
+
+     {% extends "_base.html" %}
+     {% block title %}My Page{% endblock %}
+     {% block page_css %}<style>…local rules…</style>{% endblock %}
+     {% block content %}…{% endblock %}
+     {% block scripts %}<script nonce="{{ request.state.csp_nonce }}">…</script>{% endblock %}
+
+   Requires in context: `request`, `user`, `modules` (the last populated
+   by app.policies.page_context.build_page_modules). #}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <link rel="stylesheet" href="/static/css/mobile.css?v=m15">
+  <link rel="stylesheet" href="/static/css/_shell.css?v=s1">
+  <link rel="icon" href="/static/img/favicon.svg" type="image/svg+xml">
+  <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico">
+  <link rel="apple-touch-icon" sizes="180x180" href="/static/img/icon-180.png">
+  <link rel="manifest" href="/static/manifest.json">
+  <title>{% block title %}{% endblock %} — Command Nexus</title>
+  {% block page_css %}{% endblock %}
+  {% block head_extra %}{% endblock %}
+</head>
+<body class="{% block body_class %}{% endblock %}">
+{% include "_page_header.html" %}
+
+{% block content %}{% endblock %}
+
+<script nonce="{{ request.state.csp_nonce }}">
+  document.title = document.title.replace("Command Nexus", "{{ request.state.branding.page_title_prefix }}");
+</script>
+{% block scripts %}{% endblock %}
+<script src="/static/js/mobile.js?v=m2"></script>
+{% include "_mobile_nav.html" %}
+</body>
+</html>

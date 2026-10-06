@@ -1,0 +1,240 @@
+{% extends "_base.html" %}
+{% block title %}Onboarding Links{% endblock %}
+{% block page_css %}
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font-ui); font-size: 13px; min-height: 100vh; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .container { max-width: 1400px; margin: 0 auto; padding: 20px 24px; }
+  h1 { font-size: 18px; font-weight: 600; margin-bottom: 6px; }
+  h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); margin: 0 0 10px; }
+  .subtitle { color: var(--text-muted); font-size: 12px; margin-bottom: 18px; }
+
+  .panel {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+    padding: 16px 18px; margin-bottom: 16px;
+  }
+
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  label { display: block; font-size: 10px; color: var(--text-muted); margin: 10px 0 4px; text-transform: uppercase; letter-spacing: .05em; font-weight: 600; }
+  input, select, textarea {
+    width: 100%; padding: 6px 10px; font-size: 12px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 4px; color: var(--text);
+    font-family: var(--font-ui);
+  }
+  input:focus, select:focus { outline: none; border-color: var(--accent); }
+
+  .btn {
+    display: inline-block; padding: 6px 14px; font-size: 12px; font-weight: 500;
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 4px;
+    color: var(--text); cursor: pointer; text-decoration: none;
+  }
+  .btn:hover { background: var(--border); }
+  .btn-primary { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+  .btn-primary:hover { filter: brightness(1.1); }
+  .btn-sm { padding: 3px 8px; font-size: 11px; }
+
+  .status-btns { display: flex; gap: 4px; margin-bottom: 10px; }
+  .status-btns .btn-sm.active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+
+  table { width: 100%; border-collapse: collapse; background: var(--surface); }
+  thead th {
+    background: var(--surface2); padding: 8px; text-align: left; font-size: 10px;
+    font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em;
+    border-bottom: 1px solid var(--border); white-space: nowrap;
+  }
+  tbody td { padding: 7px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; font-size: 12px; }
+  tbody tr:hover { background: var(--surface2); }
+
+  .status-pending { color: var(--yellow); font-weight: 500; }
+  .status-submitted { color: var(--green); font-weight: 500; }
+  .status-expired, .status-revoked { color: var(--text-muted); font-weight: 500; }
+
+  .last-issued {
+    background: rgba(63,185,80,0.08); border: 1px solid rgba(63,185,80,0.3);
+    border-radius: 4px; padding: 12px; margin-top: 12px;
+  }
+  .last-issued .url {
+    font-family: var(--font-mono); font-size: 11px; padding: 6px 8px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 3px;
+    margin-top: 6px; word-break: break-all;
+  }
+  .err { color: var(--red); margin-top: 10px; font-size: 12px; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="container">
+  <h1>Onboarding Links</h1>
+  <div class="subtitle">
+    Generate a single-use URL for a new hire — they fill in their own info; on submit it lands on the building's room-roster sheet + into the provision queue as <strong>pending review</strong>.
+    <a href="/staff">← back to Staff</a>
+  </div>
+
+  <div class="panel">
+    <h2>Generate a Link</h2>
+    <div class="row3">
+      <div>
+        <label>Building</label>
+        <select id="new-building">
+          <option value="PES">PES — the district Elementary</option>
+          <option value="EPE">EPE — East the district Elementary</option>
+          <option value="PHS">PHS — the district High</option>
+        </select>
+      </div>
+      <div>
+        <label>Expires In (days)</label>
+        <input id="new-ttl" type="number" min="1" max="30" value="7">
+      </div>
+      <div>
+        <label>Preset Room (optional)</label>
+        <input id="new-room" placeholder="e.g. 127">
+      </div>
+    </div>
+    <div class="row2">
+      <div>
+        <label>Preset Title (optional)</label>
+        <input id="new-title" placeholder="e.g. 2nd Grade Teacher">
+      </div>
+      <div>
+        <label>Internal Notes (optional)</label>
+        <input id="new-notes" placeholder="Who is this for? — visible only to admins">
+      </div>
+    </div>
+    <button class="btn btn-primary" id="issue-btn" style="margin-top: 14px">Generate Link</button>
+    <div id="issue-result"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Recent Tokens</h2>
+    <div class="status-btns">
+      <button class="btn btn-sm active" data-status="pending">Pending</button>
+      <button class="btn btn-sm" data-status="submitted">Submitted</button>
+      <button class="btn btn-sm" data-status="expired">Expired</button>
+      <button class="btn btn-sm" data-status="revoked">Revoked</button>
+      <button class="btn btn-sm" data-status="">All</button>
+    </div>
+    <table id="tokens-table">
+      <thead>
+        <tr>
+          <th>Building</th>
+          <th>Issued By</th>
+          <th>Issued</th>
+          <th>Expires</th>
+          <th>Status</th>
+          <th>Notes / Result</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody><tr><td colspan="7" style="color: var(--text-muted)">Loading…</td></tr></tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script nonce="{{ request.state.csp_nonce }}">
+const H_JSON = {'Content-Type': 'application/json', 'X-Requested-With': 'CommandNexus'};
+const H = {'X-Requested-With': 'CommandNexus'};
+
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function fmtDate(iso) { if (!iso) return '—'; const d = new Date(iso); return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}); }
+
+let currentFilter = 'pending';
+
+async function issueToken() {
+    const btn = document.getElementById('issue-btn');
+    const result = document.getElementById('issue-result');
+    btn.disabled = true;
+    btn.textContent = 'Generating…';
+    result.innerHTML = '';
+
+    const payload = {
+        building: document.getElementById('new-building').value,
+        ttl_days: parseInt(document.getElementById('new-ttl').value, 10) || 7,
+        preset_room: document.getElementById('new-room').value.trim() || null,
+        preset_title: document.getElementById('new-title').value.trim() || null,
+        notes: document.getElementById('new-notes').value.trim() || null,
+    };
+
+    try {
+        const resp = await fetch('/api/staff/onboarding-tokens', {
+            method: 'POST', headers: H_JSON, body: JSON.stringify(payload),
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+            result.innerHTML = `<div class="err">${esc(data.detail || 'Failed')}</div>`;
+        } else {
+            result.innerHTML = `<div class="last-issued">
+                <div><strong>Link ready</strong> — share with the new hire (expires ${fmtDate(data.expires_at)}):</div>
+                <div class="url" id="new-url">${esc(data.url)}</div>
+                <button class="btn btn-sm" style="margin-top:8px" id="copy-btn">Copy to Clipboard</button>
+            </div>`;
+            document.getElementById('copy-btn').addEventListener('click', () => {
+                navigator.clipboard.writeText(data.url).then(() => {
+                    document.getElementById('copy-btn').textContent = 'Copied!';
+                });
+            });
+            loadTokens(currentFilter);
+        }
+    } catch(e) {
+        result.innerHTML = `<div class="err">${esc(e.message)}</div>`;
+    }
+    btn.disabled = false;
+    btn.textContent = 'Generate Link';
+}
+
+async function loadTokens(status) {
+    currentFilter = status;
+    document.querySelectorAll('.status-btns .btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.status === status);
+    });
+    const tbody = document.querySelector('#tokens-table tbody');
+    tbody.innerHTML = '<tr><td colspan="7" style="color: var(--text-muted)">Loading…</td></tr>';
+    try {
+        const url = status ? `/api/staff/onboarding-tokens?status=${encodeURIComponent(status)}` : '/api/staff/onboarding-tokens';
+        const resp = await fetch(url, {headers: H});
+        const data = await resp.json();
+        if (!data.tokens || data.tokens.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="color: var(--text-muted)">No tokens.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = data.tokens.map(t => {
+            const noteBits = [];
+            if (t.notes) noteBits.push(esc(t.notes));
+            if (t.preset_room) noteBits.push(`room ${esc(t.preset_room)}`);
+            if (t.preset_title) noteBits.push(esc(t.preset_title));
+            if (t.resulting_queue_id) noteBits.push(`→ queue #${t.resulting_queue_id}`);
+            const actions = t.status === 'pending'
+                ? `<button class="btn btn-sm" data-revoke="${t.id}">Revoke</button>`
+                : '';
+            return `<tr>
+                <td>${esc(t.building)}</td>
+                <td>${esc(t.issued_by)}</td>
+                <td>${fmtDate(t.issued_at)}</td>
+                <td>${fmtDate(t.expires_at)}</td>
+                <td class="status-${esc(t.status)}">${esc(t.status)}</td>
+                <td>${noteBits.join(' · ') || '—'}</td>
+                <td>${actions}</td>
+            </tr>`;
+        }).join('');
+        tbody.querySelectorAll('[data-revoke]').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                if (!confirm('Revoke this pending token?')) return;
+                await fetch(`/api/staff/onboarding-tokens/${btn.dataset.revoke}`, {method: 'DELETE', headers: H});
+                loadTokens(currentFilter);
+            });
+        });
+    } catch(e) {
+        tbody.innerHTML = `<tr><td colspan="7" class="err">${esc(e.message)}</td></tr>`;
+    }
+}
+
+document.getElementById('issue-btn').addEventListener('click', issueToken);
+document.querySelectorAll('[data-status]').forEach(btn => {
+    btn.addEventListener('click', () => loadTokens(btn.dataset.status));
+});
+loadTokens('pending');
+</script>
+{% endblock %}

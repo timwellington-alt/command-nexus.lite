@@ -1,0 +1,216 @@
+services:
+
+  # ── Reverse Proxy ──────────────────────────────────────────
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: nexus-lite-nginx
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+    networks:
+      - nexus-internal
+    depends_on:
+      api:
+        condition: service_healthy
+
+  # ── Database ───────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: nexus-lite-postgres
+    restart: unless-stopped
+    command:
+      - postgres
+      - -c
+      - max_connections=200
+      - -c
+      - shared_buffers=256MB
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-nexus_admin}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_DB: ${POSTGRES_DB:-command_nexus_lite}
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    secrets:
+      - postgres_password
+    networks:
+      - nexus-internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nexus_admin}"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ── Cache / Job Queue ──────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: nexus-lite-redis
+    restart: unless-stopped
+    command: >
+      sh -c "redis-server --requirepass $$(cat /run/secrets/redis_password) --appendonly yes"
+    volumes:
+      - redis-data:/data
+    secrets:
+      - redis_password
+    networks:
+      - nexus-internal
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a $$(cat /run/secrets/redis_password) ping | grep PONG"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ── API ────────────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: app/Dockerfile
+    container_name: nexus-lite-api
+    restart: unless-stopped
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*"]
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      DOMAIN: ${DOMAIN}
+      POSTGRES_HOST: nexus-lite-postgres
+      POSTGRES_USER: ${POSTGRES_USER:-nexus_admin}
+      POSTGRES_DB: ${POSTGRES_DB:-command_nexus_lite}
+      REDIS_HOST: nexus-lite-redis
+      GOOGLE_ADMIN_EMAIL: ${GOOGLE_ADMIN_EMAIL}
+      GOOGLE_DOMAIN: ${GOOGLE_DOMAIN}
+      SECRETS_DIR: /run/secrets
+    volumes:
+      - ./app:/app/app:ro
+      - ./migrations:/app/migrations:ro
+      - ./data/photos:/app/data/photos
+      - ./data/exports:/app/data/exports
+    secrets:
+      - app_secret_key
+      - postgres_password
+      - redis_password
+      - google_client_id
+      - google_client_secret
+      - settings_encryption_key
+      - google_service_account.json
+    networks:
+      - nexus-internal
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # ── Worker ─────────────────────────────────────────────────
+  worker:
+    build:
+      context: .
+      dockerfile: app/Dockerfile
+    container_name: nexus-lite-worker
+    restart: unless-stopped
+    labels:
+      autoheal: "true"
+    command: ["arq", "app.worker.WorkerSettings"]
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      POSTGRES_HOST: nexus-lite-postgres
+      POSTGRES_USER: ${POSTGRES_USER:-nexus_admin}
+      POSTGRES_DB: ${POSTGRES_DB:-command_nexus_lite}
+      REDIS_HOST: nexus-lite-redis
+      SECRETS_DIR: /run/secrets
+    volumes:
+      - ./app:/app/app:ro
+      - ./data/photos:/app/data/photos
+      - ./data/exports:/app/data/exports
+    secrets:
+      - app_secret_key
+      - postgres_password
+      - redis_password
+      - google_client_id
+      - google_client_secret
+      - settings_encryption_key
+      - google_service_account.json
+    networks:
+      - nexus-internal
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "test $$(( $$(date +%s) - $$(stat -c %Y /tmp/nexus_worker.heartbeat 2>/dev/null || echo 0) )) -lt 180"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+  # ── Scheduler ──────────────────────────────────────────────
+  scheduler:
+    build:
+      context: .
+      dockerfile: app/Dockerfile
+    container_name: nexus-lite-scheduler
+    restart: unless-stopped
+    labels:
+      autoheal: "true"
+    command: ["python", "-m", "app.scheduler"]
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      REDIS_HOST: nexus-lite-redis
+      SECRETS_DIR: /run/secrets
+    volumes:
+      - ./app:/app/app:ro
+    secrets:
+      - redis_password
+    networks:
+      - nexus-internal
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "test $$(( $$(date +%s) - $$(stat -c %Y /tmp/nexus_scheduler.heartbeat 2>/dev/null || echo 0) )) -lt 120"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # ── Autoheal ───────────────────────────────────────────────
+  autoheal:
+    image: willfarrell/autoheal:1.2.0
+    container_name: nexus-lite-autoheal
+    restart: always
+    environment:
+      AUTOHEAL_CONTAINER_LABEL: autoheal
+      AUTOHEAL_INTERVAL: 60
+      AUTOHEAL_START_PERIOD: 60
+      DOCKER_SOCK: /var/run/docker.sock
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+volumes:
+  pg-data:
+  redis-data:
+
+networks:
+  nexus-internal:
+    driver: bridge
+
+secrets:
+  app_secret_key:
+    file: ./secrets/app_secret_key
+  postgres_password:
+    file: ./secrets/postgres_password
+  redis_password:
+    file: ./secrets/redis_password
+  google_client_id:
+    file: ./secrets/google_client_id
+  google_client_secret:
+    file: ./secrets/google_client_secret
+  settings_encryption_key:
+    file: ./secrets/settings_encryption_key
+  google_service_account.json:
+    file: ./secrets/google_service_account.json

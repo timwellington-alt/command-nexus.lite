@@ -1,0 +1,4 @@
+# District-specific IP allowlist
+# Copy to allowlist.conf and add your IPs
+# allow 203.0.113.0/24;    # District network
+# allow 198.51.100.50;     # Remote staff

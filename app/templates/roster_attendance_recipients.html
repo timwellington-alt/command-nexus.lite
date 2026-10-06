@@ -1,0 +1,373 @@
+{% extends "_base.html" %}
+{% block title %}Attendance Report Recipients{% endblock %}
+{% block page_css %}
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; font-size: 14px; min-height: 100vh; }
+
+.content { max-width: 1400px; margin: 24px auto; padding: 0 24px; }
+.page-title { font-size: 18px; font-weight: 600; margin-bottom: 6px; }
+.subtitle { color: var(--text-muted); font-size: 12px; margin-bottom: 20px; }
+.subtitle code { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; background: var(--surface2); padding: 1px 5px; border-radius: 3px; }
+
+.actions-bar { display: flex; gap: 8px; margin-bottom: 20px; }
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: var(--surface2); color: var(--text); text-decoration: none; }
+.btn:hover { background: var(--border); }
+.btn-primary { background: var(--accent-dim); border-color: var(--accent); }
+.btn-primary:hover { background: var(--accent); }
+
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 20px; overflow: hidden; }
+.panel-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.panel-header h2 { font-size: 14px; font-weight: 600; margin: 0; }
+.panel-body { padding: 16px; }
+
+.form-row { display: grid; grid-template-columns: 2fr 2fr 2fr auto; gap: 12px; align-items: end; margin-bottom: 16px; }
+@media (max-width: 800px) { .form-row { grid-template-columns: 1fr; } }
+.form-field label { display: block; font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+.form-field input, .form-field select {
+    width: 100%; background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+    padding: 7px 10px; border-radius: 5px; font-size: 13px;
+}
+.form-status { font-size: 12px; color: var(--text-muted); margin-left: 8px; align-self: center; }
+
+.data-table { width: 100%; border-collapse: collapse; }
+.data-table th { text-align: left; padding: 8px 12px; font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border); background: var(--surface2); white-space: nowrap; }
+.data-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; font-size: 13px; }
+.data-table tr:last-child td { border-bottom: none; }
+.data-table tr:hover td { background: var(--surface2); }
+.mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
+.building-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; background: rgba(88,166,255,0.12); color: var(--accent); }
+.building-badge.district { background: rgba(163,113,247,0.15); color: #a371f7; }
+.status-badge { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
+.status-badge.ok { background: rgba(63,185,80,0.15); color: var(--green); }
+.status-badge.warn { background: rgba(210,153,34,0.15); color: var(--yellow); }
+.row-actions { display: flex; gap: 4px; }
+.row-actions button {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+    padding: 4px 10px; border-radius: 4px; font-size: 12px; cursor: pointer;
+}
+.row-actions button.danger { color: var(--red); }
+.empty-row td { text-align: center; color: var(--text-muted); padding: 32px; }
+
+/* Staff-search autocomplete (matches docs.html eeStaffSearch pattern) */
+.email-field-wrap { position: relative; }
+.ee-suggest { display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 30; background: var(--surface); border: 1px solid var(--border); border-top: none; border-radius: 0 0 6px 6px; max-height: 220px; overflow-y: auto; }
+.ee-suggest.open { display: block; }
+.ee-suggest-item { padding: 7px 10px; font-size: 12px; cursor: pointer; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; gap: 10px; }
+.ee-suggest-item:last-child { border-bottom: none; }
+.ee-suggest-item:hover { background: var(--surface2); }
+.ee-suggest-item strong { color: var(--text); font-weight: 600; }
+.ee-suggest-item .sug-email { color: var(--text-muted); font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="content">
+
+<h1 class="page-title">Attendance Report Recipients</h1>
+<div class="subtitle">
+    Configure who receives the daily absentee email for each building.
+    Empty building = district-wide. Runs nightly via <code>send_attendance_daily_reports</code>.
+</div>
+
+<div class="actions-bar">
+    <a class="btn" href="/settings">&larr; Back to Settings</a>
+</div>
+
+<div class="panel">
+    <div class="panel-header"><h2>Schedule</h2></div>
+    <div class="panel-body">
+        <div style="display:flex;gap:20px;align-items:end;flex-wrap:wrap">
+            <div class="form-field" style="min-width:200px">
+                <label for="f-send-time">Send time (weekdays)</label>
+                <select id="f-send-time" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:5px;font-size:13px"></select>
+            </div>
+            <button id="save-schedule" class="btn btn-primary">Save schedule</button>
+            <span id="schedule-status" style="font-size:12px;color:var(--text-muted)"></span>
+        </div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:10px">
+            Fires Mon-Fri only. MetaSolutions "Daily Attendance" email lands ~10:30 AM, so leave the send time at 11:00 or later for a full picture. Timezone: <span id="schedule-tz"></span>.
+        </div>
+    </div>
+</div>
+
+<div class="panel">
+    <div class="panel-header"><h2>Add recipient</h2></div>
+    <div class="panel-body">
+        <form id="add-form">
+            <div class="form-row">
+                <div class="form-field">
+                    <label for="f-building">Building</label>
+                    <select id="f-building">
+                        <option value="">District (all schools)</option>
+                        {% for b in buildings %}
+                        <option value="{{ b.code }}">{{ b.full_name }} ({{ b.code }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label for="f-email">Email</label>
+                    <div class="email-field-wrap">
+                        <input id="f-email" type="email" placeholder="Start typing a name…"
+                               autocomplete="off" required>
+                        <div id="f-email-suggest" class="ee-suggest"></div>
+                    </div>
+                </div>
+                <div class="form-field">
+                    <label for="f-notes">Notes (optional)</label>
+                    <input id="f-notes" type="text" placeholder="e.g. cafeteria manager">
+                </div>
+                <div>
+                    <button type="submit" class="btn btn-primary">Add recipient</button>
+                </div>
+            </div>
+            <span id="form-status" class="form-status"></span>
+        </form>
+    </div>
+</div>
+
+<div class="panel">
+    <div class="panel-header">
+        <h2>Configured recipients</h2>
+        <span id="count-label" style="font-size:11px;color:var(--text-muted)"></span>
+    </div>
+    <table class="data-table" id="tbl-recipients">
+        <thead>
+            <tr>
+                <th>Building</th>
+                <th>Email</th>
+                <th>Status</th>
+                <th>Notes</th>
+                <th>Added</th>
+                <th style="width:220px">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr class="empty-row"><td colspan="6">Loading&hellip;</td></tr>
+        </tbody>
+    </table>
+</div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ request.state.csp_nonce }}">
+(function () {
+    const HP = { 'X-Requested-With': 'CommandNexus', 'Content-Type': 'application/json' };
+    const H = { 'X-Requested-With': 'CommandNexus' };
+
+    async function fetchJSON(url, opts) {
+        const r = await fetch(url, Object.assign({ credentials: 'same-origin' }, opts || {}));
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(j.detail || (r.status + ' ' + r.statusText));
+        return j;
+    }
+
+    function esc(s) {
+        return String(s || '').replace(/[&<>"']/g, c => ({
+            '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+        })[c]);
+    }
+
+    // Shared staff-search autocomplete — matches eeStaffSearch pattern
+    // from docs.html. Per directive, every single-value email input
+    // must wire through /api/settings/staff-search.
+    let _searchTimer = null;
+    function staffSearch(query) {
+        clearTimeout(_searchTimer);
+        const panel = document.getElementById('f-email-suggest');
+        const q = (query || '').trim();
+        if (q.length < 2) { panel.classList.remove('open'); return; }
+        _searchTimer = setTimeout(async () => {
+            try {
+                const r = await fetch('/api/settings/staff-search?q=' + encodeURIComponent(q),
+                    { headers: H, credentials: 'same-origin' });
+                if (!r.ok) { panel.classList.remove('open'); return; }
+                const data = await r.json();
+                const users = (data.users || []).filter(u => u.email);
+                if (!users.length) {
+                    panel.innerHTML = '<div class="ee-suggest-item" style="color:var(--text-muted);cursor:default">No matches</div>';
+                    panel.classList.add('open');
+                    return;
+                }
+                panel.innerHTML = users.map(u =>
+                    `<div class="ee-suggest-item" data-pick-email="${esc(u.email)}" data-pick-name="${esc(u.name)}">
+                        <strong>${esc(u.name)}</strong>
+                        <span class="sug-email">${esc(u.email)}</span>
+                    </div>`
+                ).join('');
+                panel.classList.add('open');
+            } catch (e) {
+                panel.classList.remove('open');
+            }
+        }, 250);
+    }
+
+    function pickEmail(email, name) {
+        document.getElementById('f-email').value = email;
+        document.getElementById('f-email-suggest').classList.remove('open');
+    }
+
+    function buildingLabel(code) {
+        if (!code) return '<span class="building-badge district">DISTRICT</span>';
+        return '<span class="building-badge">' + code + '</span>';
+    }
+
+    async function load() {
+        const tbody = document.querySelector('#tbl-recipients tbody');
+        try {
+            const data = await fetchJSON('/api/roster/analytics/attendance-recipients');
+            const rows = data.recipients || [];
+            document.getElementById('count-label').textContent =
+                rows.length + ' recipient' + (rows.length === 1 ? '' : 's');
+            if (!rows.length) {
+                tbody.innerHTML = '<tr class="empty-row"><td colspan="6">No recipients yet — add one above.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = '';
+            for (const r of rows) {
+                const tr = document.createElement('tr');
+                const status = r.active
+                    ? '<span class="status-badge ok">Active</span>'
+                    : '<span class="status-badge warn">Paused</span>';
+                const created = r.created_at ? r.created_at.replace('T', ' ').slice(0, 16) : '';
+                tr.innerHTML =
+                    '<td>' + buildingLabel(r.building_code) + '</td>' +
+                    '<td class="mono">' + r.email + '</td>' +
+                    '<td>' + status + '</td>' +
+                    '<td>' + (r.notes || '') + '</td>' +
+                    '<td style="color:var(--text-muted);font-size:12px">' + created + '</td>' +
+                    '<td><div class="row-actions">' +
+                        '<button data-toggle="' + r.id + '" data-active="' + (!r.active) + '">' +
+                            (r.active ? 'Pause' : 'Resume') + '</button>' +
+                        '<button data-test="' + r.id + '" data-email="' + r.email + '" data-building="' + r.building_code + '">Test send</button>' +
+                        '<button class="danger" data-delete="' + r.id + '">Delete</button>' +
+                    '</div></td>';
+                tbody.appendChild(tr);
+            }
+        } catch (e) {
+            tbody.innerHTML = '<tr class="empty-row"><td colspan="6" style="color:var(--red)">Failed to load: ' + e.message + '</td></tr>';
+        }
+    }
+
+    document.getElementById('add-form').addEventListener('submit', async function (e) {
+        e.preventDefault();
+        const status = document.getElementById('form-status');
+        const email = document.getElementById('f-email').value.trim();
+        const building = document.getElementById('f-building').value;
+        const notes = document.getElementById('f-notes').value.trim() || null;
+        if (!email) return;
+        status.textContent = 'Adding…';
+        try {
+            await fetchJSON('/api/roster/analytics/attendance-recipients', {
+                method: 'POST', headers: HP,
+                body: JSON.stringify({ building_code: building, email: email, notes: notes }),
+            });
+            document.getElementById('f-email').value = '';
+            document.getElementById('f-notes').value = '';
+            status.textContent = 'Added.';
+            await load();
+            setTimeout(() => status.textContent = '', 2500);
+        } catch (err) {
+            status.textContent = 'Error: ' + err.message;
+        }
+    });
+
+    document.addEventListener('click', async function (e) {
+        const t = e.target;
+        if (t.dataset.toggle) {
+            try {
+                await fetchJSON('/api/roster/analytics/attendance-recipients/' + t.dataset.toggle + '/toggle', {
+                    method: 'POST', headers: HP,
+                    body: JSON.stringify({ active: t.dataset.active === 'true' }),
+                });
+                await load();
+            } catch (err) { alert('Failed: ' + err.message); }
+        } else if (t.dataset.delete) {
+            if (!confirm('Delete this recipient?')) return;
+            try {
+                await fetchJSON('/api/roster/analytics/attendance-recipients/' + t.dataset.delete, {
+                    method: 'DELETE', headers: HP,
+                });
+                await load();
+            } catch (err) { alert('Failed: ' + err.message); }
+        } else if (t.dataset.test) {
+            const email = t.dataset.email;
+            const building = t.dataset.building || '';
+            if (!confirm('Send today’s digest to ' + email + ' now?')) return;
+            t.disabled = true; const label = t.textContent; t.textContent = 'Sending…';
+            try {
+                const r = await fetchJSON('/api/roster/analytics/attendance-recipients/send-test', {
+                    method: 'POST', headers: HP,
+                    body: JSON.stringify({ email: email, building_code: building }),
+                });
+                alert(r.ok ? 'Sent.' : ('Skipped: ' + (r.reason || 'unknown')));
+            } catch (err) {
+                alert('Failed: ' + err.message);
+            } finally {
+                t.disabled = false; t.textContent = label;
+            }
+        }
+    });
+
+    // Staff-search autocomplete wiring — oninput + delegated click for
+    // suggestion picks + blur close (delayed so mousedown fires first).
+    document.getElementById('f-email').addEventListener('input', function (e) {
+        staffSearch(e.target.value);
+    });
+    document.getElementById('f-email').addEventListener('blur', function () {
+        setTimeout(() => document.getElementById('f-email-suggest').classList.remove('open'), 150);
+    });
+    document.getElementById('f-email-suggest').addEventListener('mousedown', function (e) {
+        const item = e.target.closest('.ee-suggest-item');
+        if (!item || !item.dataset.pickEmail) return;
+        e.preventDefault();
+        pickEmail(item.dataset.pickEmail, item.dataset.pickName);
+    });
+
+    // ── Schedule (Send time) — 15-min granular ─────────────────
+    async function loadSchedule() {
+        try {
+            const data = await fetchJSON('/api/roster/analytics/attendance-schedule');
+            const sel = document.getElementById('f-send-time');
+            sel.innerHTML = '';
+            // Populate every 15-min slot 00:00 → 23:45
+            for (let h = 0; h < 24; h++) {
+                for (const m of [0, 15, 30, 45]) {
+                    const opt = document.createElement('option');
+                    const hh = String(h).padStart(2, '0');
+                    const mm = String(m).padStart(2, '0');
+                    opt.value = `${h}:${m}`;
+                    opt.textContent = `${hh}:${mm}`;
+                    if (h === data.send_hour && m === data.send_minute) opt.selected = true;
+                    sel.appendChild(opt);
+                }
+            }
+            document.getElementById('schedule-tz').textContent = data.timezone;
+        } catch (e) {
+            document.getElementById('schedule-status').textContent = 'Failed to load schedule';
+        }
+    }
+
+    document.getElementById('save-schedule').addEventListener('click', async function () {
+        const [h, m] = document.getElementById('f-send-time').value.split(':').map(x => parseInt(x, 10));
+        const status = document.getElementById('schedule-status');
+        status.textContent = 'Saving…';
+        try {
+            await fetchJSON('/api/roster/analytics/attendance-schedule', {
+                method: 'POST', headers: HP,
+                body: JSON.stringify({ send_hour: h, send_minute: m }),
+            });
+            status.textContent = 'Saved.';
+            setTimeout(() => status.textContent = '', 2500);
+        } catch (err) {
+            status.textContent = 'Error: ' + err.message;
+        }
+    });
+
+    loadSchedule();
+    load();
+})();
+</script>
+{% endblock %}

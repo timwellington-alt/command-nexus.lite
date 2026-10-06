@@ -1,0 +1,261 @@
+{% extends "_base.html" %}
+{% block title %}Roster Analytics{% endblock %}
+{% block page_css %}
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; font-size: 14px; min-height: 100vh; }
+
+.content { max-width: 1400px; margin: 24px auto; padding: 0 24px; overflow: hidden; }
+.page-title { font-size: 18px; font-weight: 600; margin-bottom: 6px; }
+.subtitle { color: var(--text-muted); font-size: 12px; margin-bottom: 20px; }
+.subtitle code { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; background: var(--surface2); padding: 1px 5px; border-radius: 3px; }
+
+.pill { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; background: rgba(210,153,34,0.15); color: var(--yellow); border: 1px solid rgba(210,153,34,0.3); margin-left: 8px; vertical-align: middle; }
+.pill.ok { background: rgba(63,185,80,0.15); color: var(--green); border-color: rgba(63,185,80,0.3); }
+
+.tab-bar { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--border); overflow-x: auto; }
+.tab-btn { padding: 8px 16px; font-size: 13px; font-weight: 500; cursor: pointer; background: none; border: none; color: var(--text-muted); border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color 0.15s, border-color 0.15s; white-space: nowrap; }
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-btn:hover { color: var(--text); }
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+
+.filter-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; }
+.filter-bar label { font-size: 12px; color: var(--text-muted); display: inline-flex; align-items: center; gap: 6px; }
+.filter-bar select, .filter-bar input { background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 5px 10px; border-radius: 5px; font-size: 13px; }
+
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 20px; overflow: hidden; }
+.panel-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.panel-header h2 { font-size: 14px; font-weight: 600; margin: 0; }
+.panel-body { padding: 16px; }
+.chart-wrap { position: relative; height: 320px; }
+.chart-wrap.tall { height: 420px; }
+
+.data-table { width: 100%; border-collapse: collapse; table-layout: auto; }
+.data-table th { text-align: left; padding: 8px 10px; font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border); background: var(--surface2); white-space: nowrap; }
+.data-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; font-size: 13px; }
+.data-table tr:last-child td { border-bottom: none; }
+.data-table tr:hover td { background: var(--surface2); }
+.data-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+@media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } }
+.grid-2 .panel { margin-bottom: 0; }
+
+.placeholder { padding: 40px 20px; text-align: center; color: var(--text-muted); font-size: 13px; line-height: 1.5; }
+.placeholder .icon { font-size: 28px; opacity: 0.4; margin-bottom: 10px; }
+.placeholder code { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; background: var(--surface2); padding: 1px 6px; border-radius: 3px; }
+
+.sparkline { display: inline-block; height: 24px; width: 120px; vertical-align: middle; }
+.mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
+.status-badge { display: inline-block; padding: 1px 8px; border-radius: 3px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
+.status-badge.ok { background: rgba(63,185,80,0.15); color: var(--green); }
+.status-badge.warn { background: rgba(210,153,34,0.15); color: var(--yellow); }
+.status-badge.err { background: rgba(248,81,73,0.15); color: var(--red); }
+.status-badge.info { background: rgba(88,166,255,0.15); color: var(--accent); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="content">
+
+<h1 class="page-title">
+    Roster Analytics
+    {% if partial_yoy %}<span class="pill">Partial YoY — since {{ partial_yoy }}</span>{% endif %}
+</h1>
+<div class="subtitle">
+    Latest snapshot: {{ latest_snapshot or 'not yet run' }}
+    &middot; from <code>roster_analytics_daily</code> + <code>roster_analytics_sla_events</code> (rebuilt nightly)
+</div>
+
+<div class="tab-bar" role="tablist">
+    <button class="tab-btn active" data-tab="enrollment">Enrollment</button>
+    <button class="tab-btn" data-tab="grade">Grade</button>
+    <button class="tab-btn" data-tab="attendance">Attendance</button>
+    <button class="tab-btn" data-tab="google">Google Lifecycle</button>
+    <button class="tab-btn" data-tab="capacity">IT Capacity</button>
+    <button class="tab-btn" data-tab="engagement">Engagement</button>
+    <button class="tab-btn" data-tab="anomaly">Anomaly</button>
+</div>
+
+<div class="filter-bar">
+    <label>Building
+        <select id="filter-building">
+            <option value="">District (all)</option>
+        </select>
+    </label>
+    <label>Window
+        <select id="filter-days">
+            <option value="7">Last 7 days</option>
+            <option value="30" selected>Last 30 days</option>
+            <option value="90">Last 90 days</option>
+            <option value="180">Last 180 days</option>
+            <option value="365">Last year</option>
+        </select>
+    </label>
+</div>
+
+<div class="tab-pane active" data-panel="enrollment">
+    <div class="panel">
+        <div class="panel-header"><h2>Inflow / outflow</h2></div>
+        <div class="panel-body"><div class="chart-wrap"><canvas id="chart-enrollment"></canvas></div></div>
+    </div>
+</div>
+
+<div class="tab-pane" data-panel="grade">
+    <div class="panel">
+        <div class="panel-header">
+            <h2>Grade headcount</h2>
+            <span id="grade-yoy-label" class="pill ok" style="display:none">YoY overlay</span>
+        </div>
+        <div class="panel-body"><div class="chart-wrap"><canvas id="chart-grade"></canvas></div></div>
+    </div>
+</div>
+
+<div class="tab-pane" data-panel="attendance">
+    <div class="summary-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;margin-bottom:20px">
+        <div class="panel" style="margin:0;padding:16px 20px">
+            <div style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">Chronic (≥10% YTD)</div>
+            <div style="font-size:28px;font-weight:700" id="att-chronic">&mdash;</div>
+        </div>
+        <div class="panel" style="margin:0;padding:16px 20px">
+            <div style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">District Avg Rate</div>
+            <div style="font-size:28px;font-weight:700" id="att-avg">&mdash;</div>
+        </div>
+        <div class="panel" style="margin:0;padding:16px 20px">
+            <div style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">Snapshotted Students</div>
+            <div style="font-size:28px;font-weight:700" id="att-total">&mdash;</div>
+        </div>
+        <div class="panel" style="margin:0;padding:16px 20px">
+            <div style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">Last Computed</div>
+            <div style="font-size:16px;font-weight:600;padding-top:6px" id="att-computed">&mdash;</div>
+        </div>
+    </div>
+    <div class="panel">
+        <div class="panel-header"><h2>Daily absence rate by school</h2></div>
+        <div class="panel-body"><div class="chart-wrap"><canvas id="chart-attendance-trend"></canvas></div></div>
+    </div>
+    <div class="panel">
+        <div class="panel-header">
+            <h2>Chronic absent students</h2>
+            <span style="font-size:11px;color:var(--text-muted)" id="att-chronic-caption">Top 200 by rate</span>
+        </div>
+        <table class="data-table" id="tbl-attendance-chronic">
+            <thead><tr>
+                <th>SIS ID</th>
+                <th>Name</th>
+                <th>School</th>
+                <th>Grade</th>
+                <th class="num">Days Absent</th>
+                <th class="num">Days Enrolled</th>
+                <th class="num">Rate %</th>
+            </tr></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+</div>
+
+<div class="tab-pane" data-panel="google">
+    <div class="panel">
+        <div class="panel-header"><h2>Account status trend</h2></div>
+        <div class="panel-body"><div class="chart-wrap tall"><canvas id="chart-google-trend"></canvas></div></div>
+    </div>
+    <div class="grid-2">
+        <div class="panel">
+            <div class="panel-header"><h2>Provision SLA &mdash; last 90 days</h2></div>
+            <div class="panel-body"><div class="chart-wrap"><canvas id="chart-sla-provision"></canvas></div></div>
+        </div>
+        <div class="panel">
+            <div class="panel-header"><h2>Archive SLA &mdash; last 90 days</h2></div>
+            <div class="placeholder">
+                <div class="icon">&#9680;</div>
+                Awaiting reconcile Dir-B activity.<br>
+                Archive-SLA measurement requires audit rows from live
+                <code>archive.confirmed_not_in_sis</code> writes;
+                reconcile is currently in dry-run.
+            </div>
+        </div>
+    </div>
+    <div class="panel">
+        <div class="panel-header"><h2>License utilization</h2></div>
+        <div class="placeholder">
+            <div class="icon">&#9680;</div>
+            Ed Plus / Fundamentals utilization pending &mdash; needs Google
+            <code>licenseAssignments</code> API wrapper.
+        </div>
+    </div>
+</div>
+
+<div class="tab-pane" data-panel="capacity">
+    <div class="panel">
+        <div class="panel-header"><h2>Chromebook coverage per building</h2></div>
+        <div class="panel-body"><div class="chart-wrap"><canvas id="chart-cb-coverage"></canvas></div></div>
+    </div>
+    <div class="panel">
+        <div class="panel-header"><h2>Detail</h2></div>
+        <table class="data-table" id="tbl-capacity">
+            <thead><tr>
+                <th>Building</th>
+                <th class="num">Enrolled</th>
+                <th class="num">CB Assigned</th>
+                <th class="num">Coverage %</th>
+                <th class="num">Avg Age (days)</th>
+                <th class="num">Repairs 30d</th>
+                <th class="num">Repairs / 100 kids</th>
+            </tr></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+
+<div class="tab-pane" data-panel="engagement">
+    <div class="panel">
+        <div class="panel-header"><h2>Login activity</h2></div>
+        <div class="placeholder">
+            <div class="icon">&#9680;</div>
+            Login-rate data not sampled locally yet &mdash; needs a weekly
+            Google Reports API pull.<br>
+            Snapshot table columns are already in place; a future job will
+            populate <code>logged_in_7d</code> / <code>logged_in_30d</code>.
+        </div>
+    </div>
+</div>
+
+<div class="tab-pane" data-panel="anomaly">
+    <div class="panel">
+        <div class="panel-header"><h2>Recent imports</h2></div>
+        <table class="data-table" id="tbl-imports">
+            <thead><tr>
+                <th>Started</th>
+                <th>Source</th>
+                <th>Status</th>
+                <th class="num">Added</th>
+                <th class="num">Removed</th>
+                <th class="num">Errors</th>
+                <th>Notes</th>
+            </tr></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+    <div class="panel">
+        <div class="panel-header"><h2>Per-building 14-day enrollment</h2></div>
+        <table class="data-table" id="tbl-sparklines">
+            <thead><tr>
+                <th>Building</th>
+                <th>Trend</th>
+                <th class="num">Latest</th>
+                <th class="num">Δ 14d</th>
+            </tr></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/vendor/chart.umd.min.js" nonce="{{ request.state.csp_nonce }}"></script>
+<script src="/static/js/roster_analytics.js?v=5" nonce="{{ request.state.csp_nonce }}"></script>
+{% endblock %}

@@ -1,0 +1,12 @@
+{# Shared top navigation — lite build. Stripped modules (security,
+   network, phones, chromebook, chat, docs, inventory, tickets,
+   transportation, facilities) are not shipped so their nav items
+   are removed entirely. #}
+<nav class="nav-links">
+  {% set p = request.url.path %}
+  <a class="nav-link {% if p == '/' or p == '/dashboard' %}active{% endif %}" href="/dashboard">Dashboard</a>
+  {% if modules.get('staff') %}<a class="nav-link {% if p.startswith('/staff') %}active{% endif %}" href="/staff">Staff</a>{% endif %}
+  {% if modules.get('roster') %}<a class="nav-link {% if p.startswith('/roster') %}active{% endif %}" href="/roster">Students</a>{% endif %}
+  {% if modules.get('audit') %}<a class="nav-link {% if p.startswith('/audit') %}active{% endif %}" href="/audit">Audit</a>{% endif %}
+  {% if modules.get('settings') %}<a class="nav-link {% if p.startswith('/settings') %}active{% endif %}" href="/settings">Settings</a>{% endif %}
+</nav>

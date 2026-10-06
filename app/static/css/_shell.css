@@ -1,0 +1,117 @@
+/* Shared page shell — header, top nav, user area, subnav.
+ *
+ * Loaded by _base.html; every page that extends the base picks these
+ * up for free. If a page has local overrides in its own <style>,
+ * those still win because <style> comes AFTER the <link>.
+ *
+ * Everything here matches the pre-refactor per-page copies bit-for-bit
+ * so migrated pages render identically. */
+
+:root {
+    /* Shell-scope palette. Pages that already define these under
+       :root will simply override. Keeps a lone extended page (one
+       without its own palette) from rendering unstyled. */
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1c2129;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-muted: #8b949e;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --red: #f85149;
+    --yellow: #d29922;
+    --danger: #f85149;
+    --warn: #d29922;
+    --success: #3fb950;
+    --radius: 6px;
+    --font-mono: "JetBrains Mono", monospace;
+    --font-ui: "IBM Plex Sans", system-ui, sans-serif;
+    /* Column the nav aligns to on wide viewports. Nav-links, user-area,
+       and the page content column all use this + --page-side-pad, so
+       they land at the same visual left/right edges. Pages can override
+       under their own :root (docs/vendor uses 1000px, etc.). */
+    --page-max-width: 1400px;
+    --page-side-pad: 24px;
+}
+
+/* Header + top nav.
+   Layout: logo, nav-links, and user-area are all siblings inside a
+   single centered container (.header-inner) that maxes out at
+   --page-max-width. Logo hugs the LEFT edge of that column; user-area
+   hugs the RIGHT edge; nav-links float in between. Every element
+   lines up with the same content column as the page body — no
+   absolute-positioning hacks, works consistently at every viewport. */
+.header {
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+}
+.header-inner {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px var(--page-side-pad);
+    max-width: var(--page-max-width);
+    margin: 0 auto;
+    min-width: 0;
+}
+.header .logo {
+    flex: 0 0 auto;
+    /* Sits at the LEFT edge of the centered content column. */
+}
+.header .nav-links {
+    /* Grows to fill space between logo and user-area. */
+    flex: 1;
+    min-width: 0;
+}
+.header-left { display: flex; align-items: center; gap: 16px; }
+.logo {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.05em;
+    text-decoration: none;
+}
+.nav-links { display: flex; gap: 4px; }
+.nav-link {
+    padding: 5px 12px;
+    border-radius: var(--radius);
+    font-size: 12px;
+    color: var(--muted);
+    text-decoration: none;
+    transition: color 0.15s;
+}
+.nav-link:hover { color: var(--text); text-decoration: none; }
+.nav-link.active { color: var(--accent); background: rgba(88, 166, 255, 0.08); }
+
+.user-area {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 12px;
+    color: var(--muted);
+}
+.logout { color: var(--muted); text-decoration: none; font-size: 11px; }
+.logout:hover { color: var(--text); }
+
+/* Sub-nav that most module pages use above their content — Inventory
+   tabs, Settings tabs, etc. Extracted so pages don't redefine. */
+.subnav {
+    display: flex;
+    gap: 2px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+}
+.subnav a {
+    padding: 8px 16px;
+    font-size: 13px;
+    color: var(--muted);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    text-decoration: none;
+}
+.subnav a.active { color: var(--accent); border-bottom-color: var(--accent); }
+.subnav a:hover:not(.active) { color: var(--text); }

@@ -1,0 +1,35 @@
+{# Shared page header — branded logo, top nav, user area.
+
+   Structure:
+     <header>
+       <div class="header-inner">              ← centers at --page-max-width
+         <a class="logo">…</a>                   ← hugs LEFT edge of column
+         <nav …>                                 ← next to logo
+         <div class="user-area">                 ← hugs RIGHT edge of column
+       </div>
+     </header>
+
+   Logo, nav, and user-area are all siblings inside the centered inner
+   container. This means every element lines up with the same content
+   column as the page body — no absolute positioning, no viewport-width
+   math, works consistently from narrow to wide viewports.
+
+   Requires: `request`, `user`, `modules` in the template context. #}
+<header class="header">
+  <div class="header-inner">
+    <a class="logo" href="/dashboard" id="brand-logo">
+      <img src="/static/img/logo-mark.svg" alt=""
+           style="width:22px;height:22px;vertical-align:middle;margin-right:6px">
+      <span id="brand-title" style="color: {{ request.state.branding.brand_color }}">{{ request.state.branding.title }}</span>
+    </a>
+    {% include "_top_nav.html" %}
+    <div class="user-area">
+      {% if modules.get("me") %}
+        <a class="logout" href="/me">{{ user.name or user.email }}</a>
+      {% else %}
+        <span style="color:var(--muted);font-size:11px">{{ user.name or user.email }}</span>
+      {% endif %}
+      <a class="logout" href="/auth/logout">Sign out</a>
+    </div>
+  </div>
+</header>

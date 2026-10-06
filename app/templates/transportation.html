@@ -1,0 +1,196 @@
+{% extends "_base.html" %}
+{% block title %}Transportation{% endblock %}
+{% block page_css %}
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: var(--font-ui); font-size: 14px; min-height: 100vh; }
+    .content { max-width: 1400px; margin: 24px auto; padding: 0 24px; }
+    .page-title { font-size: 18px; font-weight: 600; margin-bottom: 20px; }
+    .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 16px; }
+    .btn { display: inline-block; padding: 8px 18px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; text-decoration: none; }
+    .btn-primary { background: var(--accent); color: #000; }
+    .btn-primary:hover { opacity: 0.85; }
+    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-muted); }
+    .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+    .stat-row { display: flex; gap: 16px; margin-bottom: 16px; }
+    .stat { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 14px 20px; flex: 1; text-align: center; }
+    .stat-value { font-size: 24px; font-weight: 700; }
+    .stat-label { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+    .data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .data-table th { text-align: left; padding: 6px 8px; color: var(--text-muted); font-size: 10px; font-weight: 600; text-transform: uppercase; border-bottom: 1px solid var(--border); }
+    .data-table td { padding: 5px 8px; border-bottom: 1px solid rgba(48,54,61,0.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
+    .status-msg { font-size: 13px; margin-top: 12px; }
+    .section-label { font-size: 10px; font-weight: 600; color: var(--text-muted); letter-spacing: 0.08em; text-transform: uppercase; margin: 8px 0 10px; }
+    /* External-app link card — currently used for Fleet Watch, will
+       host other sibling apps (van GPS, bus routing, etc.) as the
+       Transportation module grows. */
+    .app-card {
+      display: flex; align-items: center; gap: 16px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 18px 22px;
+      text-decoration: none; color: var(--text);
+      transition: border-color 0.15s, background 0.15s, transform 0.15s;
+      margin-bottom: 16px;
+    }
+    .app-card:hover { border-color: var(--accent); background: var(--surface2); }
+    .app-card-icon {
+      width: 44px; height: 44px; border-radius: 8px;
+      background: rgba(88,166,255,0.12); color: var(--accent);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .app-card-body { flex: 1; min-width: 0; }
+    .app-card-title { font-size: 15px; font-weight: 600; margin-bottom: 2px; }
+    .app-card-desc { font-size: 12px; color: var(--text-muted); }
+    .app-card-arrow {
+      font-size: 18px; color: var(--text-muted);
+      transition: color 0.15s, transform 0.15s;
+    }
+    .app-card:hover .app-card-arrow { color: var(--accent); transform: translateX(2px); }
+  </style>
+{% endblock %}
+{% block content %}
+<div class="content">
+  <h1 class="page-title">Transportation</h1>
+
+  <div class="section-label">Transfinder Export</div>
+
+  <div class="stat-row">
+    <div class="stat">
+      <div class="stat-value" id="stat-rows">—</div>
+      <div class="stat-label">Data Rows</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value" id="stat-cols">—</div>
+      <div class="stat-label">Columns</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value" id="stat-sheet">—</div>
+      <div class="stat-label">Source Sheet</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <h3 style="font-size:14px;font-weight:600">Sheet Preview</h3>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-outline" id="refresh-btn">Refresh</button>
+        {% if can_execute %}
+        <button class="btn btn-outline" id="test-btn">Test Send to Me</button>
+        <button class="btn btn-primary" id="export-btn">Export to SFTP</button>
+        {% endif %}
+        <span id="export-status" class="status-msg"></span>
+      </div>
+    </div>
+    <div id="preview-container" style="overflow-x:auto">
+      <div style="text-align:center;color:var(--text-muted);padding:40px">Loading sheet data...</div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script nonce="{{ request.state.csp_nonce }}">
+const H = {'X-Requested-With': 'CommandNexus'};
+const H_JSON = {'Content-Type': 'application/json', 'X-Requested-With': 'CommandNexus'};
+
+async function loadPreview() {
+    const container = document.getElementById('preview-container');
+    container.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:40px">Loading...</div>';
+    try {
+        const data = await fetch('/api/transportation/preview', {headers: H}).then(r => r.json());
+        if (data.detail) { const errDiv = document.createElement('div'); errDiv.style.cssText = 'color:var(--red);padding:20px'; errDiv.textContent = data.detail; container.innerHTML = ''; container.appendChild(errDiv); return; }
+
+        document.getElementById('stat-rows').textContent = data.total_data_rows;
+        document.getElementById('stat-cols').textContent = data.columns;
+        document.getElementById('stat-sheet').textContent = data.title;
+        document.getElementById('stat-sheet').style.fontSize = '14px';
+
+        if (!data.headers.length) {
+            container.innerHTML = '<div style="color:var(--text-muted);padding:20px">Sheet is empty</div>';
+            return;
+        }
+
+        let html = '<table class="data-table"><thead><tr>';
+        for (const h of data.headers) {
+            html += `<th>${h}</th>`;
+        }
+        html += '</tr></thead><tbody>';
+        for (const row of data.sample) {
+            html += '<tr>';
+            for (let i = 0; i < data.headers.length; i++) {
+                html += `<td title="${(row[i]||'').replace(/"/g,'&quot;')}">${row[i] || ''}</td>`;
+            }
+            html += '</tr>';
+        }
+        if (data.total_data_rows > 10) {
+            html += `<tr><td colspan="${data.headers.length}" style="text-align:center;color:var(--text-muted);padding:10px">... ${data.total_data_rows - 10} more rows</td></tr>`;
+        }
+        html += '</tbody></table>';
+        container.innerHTML = html;
+    } catch(e) {
+        container.innerHTML = `<div style="color:var(--red);padding:20px">Error: ${e}</div>`;
+    }
+}
+
+async function exportToSftp() {
+    if (!confirm('Export the current sheet data as CSV to the Transfinder SFTP server?')) return;
+    const btn = document.getElementById('export-btn');
+    const status = document.getElementById('export-status');
+    btn.disabled = true;
+    btn.textContent = 'Exporting...';
+    status.textContent = '';
+    try {
+        const resp = await fetch('/api/transportation/export', {method: 'POST', headers: H_JSON});
+        const data = await resp.json();
+        if (resp.ok) {
+            status.style.color = 'var(--green)';
+            status.textContent = `Exported ${data.rows} rows as ${data.filename}`;
+        } else {
+            status.style.color = 'var(--red)';
+            status.textContent = data.detail || 'Export failed';
+        }
+    } catch(e) {
+        status.style.color = 'var(--red)';
+        status.textContent = 'Error: ' + e;
+    }
+    btn.disabled = false;
+    btn.textContent = 'Export to SFTP';
+}
+
+async function testSend() {
+    if (!confirm('Email the CSV export to your account as a test?')) return;
+    const btn = document.getElementById('test-btn');
+    const status = document.getElementById('export-status');
+    btn.disabled = true;
+    btn.textContent = 'Sending...';
+    status.textContent = '';
+    try {
+        const resp = await fetch('/api/transportation/test-send', {method: 'POST', headers: H_JSON});
+        const data = await resp.json();
+        if (resp.ok) {
+            status.style.color = 'var(--green)';
+            const to = Array.isArray(data.sent_to) ? data.sent_to.join(', ') : data.sent_to;
+            status.textContent = `Sent ${data.rows} rows to ${to}`;
+        } else {
+            status.style.color = 'var(--red)';
+            status.textContent = data.detail || 'Send failed';
+        }
+    } catch(e) {
+        status.style.color = 'var(--red)';
+        status.textContent = 'Error: ' + e;
+    }
+    btn.disabled = false;
+    btn.textContent = 'Test Send to Me';
+}
+
+// CSP forbids inline onclick — wire button handlers here.
+document.getElementById('refresh-btn').addEventListener('click', loadPreview);
+{% if can_execute %}
+document.getElementById('test-btn').addEventListener('click', testSend);
+document.getElementById('export-btn').addEventListener('click', exportToSftp);
+{% endif %}
+
+loadPreview();
+</script>
+{% endblock %}

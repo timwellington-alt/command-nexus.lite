@@ -1,0 +1,113 @@
+{% extends "_base.html" %}
+{% block title %}Student Exports{% endblock %}
+{% block page_css %}
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    font-size: 14px; line-height: 1.5;
+  }
+  a { color: var(--accent); text-decoration: none; }
+
+  .content-body { width: 100%; max-width: 1400px; margin: 24px auto; padding: 0 24px; }
+  .page-title { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
+  .page-sub { font-size: 13px; color: var(--text-muted); margin-bottom: 20px; }
+  .breadcrumb { font-size: 12px; color: var(--text-muted); margin-bottom: 12px; }
+  .breadcrumb a { color: var(--text-muted); }
+  .breadcrumb a:hover { color: var(--text); }
+  .ferpa-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; background: rgba(188,140,255,0.15); color: #bc8cff; border: 1px solid rgba(188,140,255,0.3); margin-left: 8px; vertical-align: middle; }
+
+  /* Grouping — one section per target app, subtle border around the set. */
+  .export-group {
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 14px 16px 18px; margin-bottom: 20px;
+    background: rgba(255,255,255,0.015);
+  }
+  .export-group-header {
+    display: flex; align-items: baseline; gap: 8px;
+    margin-bottom: 14px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .export-group-header .app-name {
+    font-size: 12px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--accent);
+  }
+  .export-group-header .app-count {
+    font-size: 11px; color: var(--text-muted);
+  }
+
+  .export-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
+
+  .export-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+    padding: 14px 16px; display: flex; flex-direction: column; gap: 8px;
+  }
+  .export-card h3 { font-size: 14px; font-weight: 600; margin: 0; }
+  .export-card .desc { font-size: 12px; color: var(--text-muted); line-height: 1.5; flex-grow: 1; }
+  .export-card .meta { font-size: 11px; color: var(--text-muted); }
+  .export-card .actions { display: flex; gap: 8px; align-items: center; margin-top: 4px; }
+
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: var(--surface2); color: var(--text); transition: background 0.15s, border-color 0.15s; text-decoration: none; }
+  .btn:hover { background: var(--border); border-color: var(--text-muted); }
+  .btn-primary { background: var(--accent-dim); border-color: var(--accent); color: var(--text); }
+  .btn-primary:hover { background: var(--accent); }
+
+  .format-badge {
+    display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: 0.05em;
+    padding: 1px 6px; border-radius: 3px; text-transform: uppercase;
+    background: var(--surface2); color: var(--text-muted); border: 1px solid var(--border);
+  }
+
+  .empty {
+    text-align: center; padding: 48px 24px; color: var(--text-muted);
+    background: var(--surface); border: 1px dashed var(--border); border-radius: 8px;
+  }
+</style>
+{% endblock %}
+{% block content %}
+<div class="content-body">
+  <div class="breadcrumb">
+    <a href="/roster">Student Directory</a> &rsaquo; Exports
+  </div>
+  <h1 class="page-title">Student Data Exports <span class="ferpa-badge">FERPA</span></h1>
+  <p class="page-sub">
+    Download student roster data in the format required by external apps.
+    Each export generates fresh from the current directory when you click Download.
+  </p>
+
+  {% if exporters %}
+  {% for app_name, group in exporters | groupby('for_app') %}
+  <div class="export-group">
+    <div class="export-group-header">
+      <span class="app-name">{{ app_name }}</span>
+      <span class="app-count">{{ group | length }} file{{ 's' if group | length != 1 else '' }}</span>
+    </div>
+    <div class="export-grid">
+      {% for exp in group %}
+      <div class="export-card">
+        <h3>{{ exp.name }}</h3>
+        <div class="desc">{{ exp.description }}</div>
+        <div class="meta">
+          <span class="format-badge">{{ exp.format }}</span>
+          &nbsp;<span title="Filename template — {yyyymmdd} substitutes today's date">{{ exp.filename_pattern }}</span>
+        </div>
+        <div class="actions">
+          <a class="btn btn-primary" href="/api/roster/exports/{{ exp.id }}/download"
+             title="Generate and download this file now">
+            &darr; Download
+          </a>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+  {% else %}
+  <div class="empty">
+    No exports registered yet.<br>
+    <small>New exports drop into <code>app/modules/roster/exports/</code> and register automatically.</small>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,188 @@
+{% extends "_base.html" %}
+{% block title %}Student Membership · Settings{% endblock %}
+{% block page_css %}
+<style>
+  .content { max-width: 1400px; margin: 24px auto; padding: 0 24px; }
+  .page-title { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+  .page-subtitle { font-size: 12px; color: var(--text-muted); margin-bottom: 20px; }
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 18px; margin-bottom: 16px; }
+  .panel-title { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); margin-bottom: 12px; }
+  .stat-row { display: flex; gap: 24px; font-size: 13px; color: var(--text); }
+  .stat-row .k { color: var(--text-muted); margin-right: 6px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); }
+  td.code { font-family: var(--font-mono); font-weight: 600; width: 90px; }
+  td.n { text-align: right; font-family: var(--font-mono); color: var(--text-muted); width: 80px; }
+  input[type=text] { width: 100%; padding: 4px 8px; background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 4px; font-size: 13px; }
+  input[type=checkbox] { width: 16px; height: 16px; cursor: pointer; }
+  .btn { padding: 6px 14px; background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 6px; cursor: pointer; font-size: 13px; }
+  .btn:hover { background: var(--border); }
+  .btn-primary { background: var(--accent); color: white; border-color: var(--accent); }
+  .btn-primary:hover { background: #4a95e0; }
+  .toast { position: fixed; bottom: 20px; right: 20px; padding: 10px 16px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; font-size: 13px; opacity: 0; transition: opacity .2s; }
+  .toast.show { opacity: 1; }
+  .toast.ok { border-color: var(--green); }
+  .toast.err { border-color: var(--red); }
+  .warn { color: var(--yellow); font-size: 11px; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="content">
+  <h1 class="page-title">Student Membership</h1>
+  <p class="page-subtitle">SIS-authoritative enrollment codes from the MetaSolutions morning report. This page controls the code → label + enrolled mapping used by guidance, deprovision, and analytics.</p>
+
+  <div class="panel">
+    <div class="panel-title">Import status</div>
+    <div class="stat-row">
+      <div><span class="k">Total students:</span> {{ total_students }}</div>
+      <div><span class="k">Last imported:</span> <span id="last-imported">{{ last_imported.isoformat() if last_imported else '—' }}</span></div>
+      <div style="margin-left:auto">
+        <input type="file" id="upload-input" accept=".csv" style="display:none">
+        <button class="btn" id="upload-btn" title="Manually upload the Memberships All Yrs All Info CSV">Manual upload</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Code map</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Code</th>
+          <th>Label</th>
+          <th title="Student is on our services — schedule, guidance, Google account.">Enrolled?</th>
+          <th title="Deprovision sweep should suspend/archive the Google account for kids in this status.">Auto-deprovision?</th>
+          <th class="n"># kids</th>
+        </tr>
+      </thead>
+      <tbody id="code-map-body"><tr><td colspan="5" style="text-align:center;color:var(--text-muted)">Loading…</td></tr></tbody>
+    </table>
+    <div style="margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input type="text" id="new-code" placeholder="NEW-CODE" style="width:120px">
+      <input type="text" id="new-label" placeholder="Label" style="flex:1;max-width:300px">
+      <label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="new-enrolled"> Enrolled</label>
+      <label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="new-deprov"> Auto-deprov</label>
+      <button class="btn" id="add-code-btn">Add code</button>
+      <button class="btn btn-primary" id="save-btn" style="margin-left:auto">Save map</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+{% endblock %}
+{% block scripts %}
+<script nonce="{{ request.state.csp_nonce }}">
+const H = {'X-Requested-With': 'CommandNexus'};
+let CODE_MAP = {};
+const COUNTS = {{ code_counts | tojson }};
+const COUNTS_BY_CODE = Object.fromEntries(COUNTS.map(r => [r.code, r.n]));
+
+function esc(s) { const d = document.createElement('div'); d.textContent = String(s ?? ''); return d.innerHTML; }
+function toast(msg, kind='ok') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `toast show ${kind}`;
+  setTimeout(() => { el.className = 'toast'; }, 2400);
+}
+
+function renderCodeMap() {
+  const tbody = document.getElementById('code-map-body');
+  const entries = Object.entries(CODE_MAP).sort();
+  // Include any codes seen in imports that aren't in the map (unknowns)
+  for (const c of Object.keys(COUNTS_BY_CODE)) {
+    if (!CODE_MAP[c]) {
+      entries.push([c, { label: '(unknown — set label)', enrolled: false, _unknown: true }]);
+    }
+  }
+  tbody.innerHTML = entries.map(([code, entry]) => `
+    <tr data-code="${esc(code)}">
+      <td class="code">${esc(code)}${entry._unknown ? ' <span class="warn">NEW</span>' : ''}</td>
+      <td><input type="text" class="cm-label" value="${esc(entry.label || '')}"></td>
+      <td><input type="checkbox" class="cm-enrolled" ${entry.enrolled ? 'checked' : ''}></td>
+      <td><input type="checkbox" class="cm-deprov" ${entry.auto_deprovision ? 'checked' : ''}></td>
+      <td class="n">${COUNTS_BY_CODE[code] ?? 0}</td>
+    </tr>
+  `).join('');
+}
+
+async function loadCodeMap() {
+  try {
+    const r = await fetch('/api/roster/membership/code-map', { headers: H });
+    const j = await r.json();
+    CODE_MAP = j.map || {};
+    renderCodeMap();
+  } catch (e) {
+    toast('Failed to load code map: ' + e, 'err');
+  }
+}
+
+async function saveMap() {
+  const out = {};
+  document.querySelectorAll('#code-map-body tr').forEach(tr => {
+    const code = tr.dataset.code;
+    const label = (tr.querySelector('.cm-label') || {}).value || '';
+    const enrolled = (tr.querySelector('.cm-enrolled') || {}).checked || false;
+    const auto_deprovision = (tr.querySelector('.cm-deprov') || {}).checked || false;
+    out[code] = { label: label.trim(), enrolled, auto_deprovision };
+  });
+  try {
+    const r = await fetch('/api/roster/membership/code-map', {
+      method: 'PUT',
+      headers: { ...H, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ map: out }),
+    });
+    if (!r.ok) throw new Error((await r.text()).slice(0, 120));
+    toast(`Saved ${Object.keys(out).length} codes`, 'ok');
+    CODE_MAP = out;
+    renderCodeMap();
+  } catch (e) {
+    toast('Save failed: ' + e.message, 'err');
+  }
+}
+
+function addCode() {
+  const code = document.getElementById('new-code').value.trim().toUpperCase();
+  const label = document.getElementById('new-label').value.trim();
+  const enrolled = document.getElementById('new-enrolled').checked;
+  const auto_deprovision = document.getElementById('new-deprov').checked;
+  if (!code) { toast('Code is required', 'err'); return; }
+  if (!label) { toast('Label is required', 'err'); return; }
+  CODE_MAP[code] = { label, enrolled, auto_deprovision };
+  document.getElementById('new-code').value = '';
+  document.getElementById('new-label').value = '';
+  document.getElementById('new-enrolled').checked = false;
+  document.getElementById('new-deprov').checked = false;
+  renderCodeMap();
+  toast('Added — click "Save map" to persist', 'ok');
+}
+
+async function uploadCsv(file) {
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    toast('Uploading…');
+    const r = await fetch('/api/roster/membership/upload', {
+      method: 'POST', headers: H, body: fd,
+    });
+    const j = await r.json();
+    if (!r.ok || !j.ok) throw new Error(j.detail || 'upload failed');
+    toast(`Imported ${j.upserted} students (${j.total_rows} rows)`, 'ok');
+    if (j.unknown_codes && j.unknown_codes.length) {
+      setTimeout(() => toast('New unknown codes — add labels: ' + j.unknown_codes.join(', '), 'err'), 2600);
+    }
+    setTimeout(() => location.reload(), 3200);
+  } catch (e) {
+    toast('Upload failed: ' + e.message, 'err');
+  }
+}
+
+document.getElementById('save-btn').addEventListener('click', saveMap);
+document.getElementById('add-code-btn').addEventListener('click', addCode);
+document.getElementById('upload-btn').addEventListener('click', () => document.getElementById('upload-input').click());
+document.getElementById('upload-input').addEventListener('change', (e) => {
+  const f = e.target.files && e.target.files[0];
+  if (f) uploadCsv(f);
+});
+loadCodeMap();
+</script>
+{% endblock %}

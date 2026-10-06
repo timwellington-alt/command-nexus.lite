@@ -1,0 +1,183 @@
+{% extends "_base.html" %}
+{% block title %}Audit Log{% endblock %}
+{% block page_css %}
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: var(--font-ui); font-size: 14px; min-height: 100vh; }
+    .breadcrumb { color: var(--muted); font-size: 13px; }
+    .breadcrumb span { color: var(--text); }
+    .user-badge { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+    .user-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); }
+    .layout { display: grid; grid-template-columns: 260px 1fr; min-height: calc(100vh - 57px); }
+    .sidebar { background: var(--surface); border-right: 1px solid var(--border); padding: 20px 16px; display: flex; flex-direction: column; gap: 24px; }
+    .sidebar-section-label { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+    .filter-group { display: flex; flex-direction: column; gap: 6px; }
+    .filter-group label { font-size: 12px; color: var(--muted); }
+    select, input[type="text"], input[type="number"] { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); font-family: var(--font-ui); font-size: 13px; padding: 6px 10px; outline: none; transition: border-color 0.15s; }
+    select:focus, input:focus { border-color: var(--accent); }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 14px; border-radius: var(--radius); font-family: var(--font-ui); font-size: 13px; font-weight: 500; cursor: pointer; border: none; transition: opacity 0.15s, background 0.15s; }
+    .btn-primary { background: var(--accent); color: #000; width: 100%; }
+    .btn-primary:hover { opacity: 0.85; }
+    .btn-secondary { background: transparent; border: 1px solid var(--border); color: var(--muted); width: 100%; }
+    .btn-secondary:hover { border-color: var(--text); color: var(--text); }
+    .btn-ferpa { background: transparent; border: 1px solid var(--student); color: var(--student); width: 100%; margin-top: 4px; }
+    .btn-ferpa:hover { background: rgba(188,140,255,0.1); }
+    .divider { height: 1px; background: var(--border); }
+    .main { display: flex; flex-direction: column; overflow: hidden; }
+    .toolbar { padding: 14px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .toolbar-left { display: flex; align-items: center; gap: 12px; }
+    .result-count { font-size: 13px; color: var(--muted); }
+    .result-count strong { color: var(--text); }
+    .ferpa-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; padding: 3px 8px; border-radius: 20px; border: 1px solid var(--student); color: var(--student); background: rgba(188,140,255,0.08); }
+    .ferpa-badge.hidden { display: none; }
+    .table-wrap { flex: 1; overflow-y: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead tr { background: var(--surface); position: sticky; top: 0; z-index: 1; }
+    th { padding: 10px 14px; text-align: left; font-weight: 600; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--border); white-space: nowrap; }
+    tbody tr { border-bottom: 1px solid rgba(48,54,61,0.6); transition: background 0.1s; }
+    tbody tr:hover { background: rgba(255,255,255,0.02); }
+    td { padding: 10px 14px; vertical-align: top; }
+    .actor { font-family: var(--font-mono); font-size: 12px; color: var(--accent); }
+    .action { font-family: var(--font-mono); font-size: 12px; word-break: break-all; }
+    .action.student { color: var(--student); }
+    .module-pill { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; background: rgba(88,166,255,0.1); color: var(--accent); border: 1px solid rgba(88,166,255,0.25); white-space: nowrap; }
+    .outcome { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; }
+    .outcome::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; }
+    .outcome.success { color: var(--success); } .outcome.success::before { background: var(--success); }
+    .outcome.denied { color: var(--danger); } .outcome.denied::before { background: var(--danger); }
+    .outcome.error { color: var(--warn); } .outcome.error::before { background: var(--warn); }
+    .ts { font-family: var(--font-mono); font-size: 11px; color: var(--muted); white-space: nowrap; }
+    .cid { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+    .details { font-size: 12px; color: var(--muted); max-width: 280px; word-break: break-word; }
+    .target { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+    .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
+    .empty-icon { font-size: 32px; margin-bottom: 12px; }
+    .loading { text-align: center; padding: 40px; color: var(--muted); font-size: 13px; }
+    .pagination { padding: 12px 20px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--surface); }
+    .page-info { font-size: 12px; color: var(--muted); }
+    .page-btns { display: flex; gap: 6px; }
+    .page-btn { padding: 5px 12px; border-radius: var(--radius); border: 1px solid var(--border); background: transparent; color: var(--text); font-size: 12px; cursor: pointer; font-family: var(--font-ui); }
+    .page-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+    .page-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    .error-banner { display: none; background: rgba(248,81,73,0.1); border: 1px solid var(--danger); border-radius: var(--radius); color: var(--danger); padding: 10px 14px; font-size: 13px; margin: 12px 20px 0; }
+  </style>
+{% endblock %}
+{% block content %}
+<div class="layout">
+  <aside class="sidebar">
+    <div>
+      <div class="sidebar-section-label">Filters</div>
+      <div class="filter-group"><label for="f-module">Module</label><select id="f-module"><option value="all">All modules</option></select></div>
+      <div class="filter-group" style="margin-top:10px"><label for="f-outcome">Outcome</label><select id="f-outcome"><option value="all">All outcomes</option><option value="success">Success</option><option value="denied">Denied</option><option value="error">Error</option></select></div>
+      <div class="filter-group" style="margin-top:10px"><label for="f-actor">Actor (email)</label><input type="text" id="f-actor" placeholder="Search by email…" /></div>
+      <div class="filter-group" style="margin-top:10px"><label for="f-action">Action contains</label><input type="text" id="f-action" placeholder="e.g. login, export…" /></div>
+      <div class="filter-group" style="margin-top:10px"><label for="f-days">Time window (days)</label><select id="f-days"><option value="1">Last 24 hours</option><option value="7">Last 7 days</option><option value="30" selected>Last 30 days</option><option value="90">Last 90 days</option><option value="365">Last 365 days</option></select></div>
+    </div>
+    <div>
+      <button class="btn btn-primary" id="btn-apply-filters">Apply filters</button>
+      <button class="btn btn-secondary" style="margin-top:6px" id="btn-clear-filters">Clear</button>
+    </div>
+    <div class="divider"></div>
+    <div>
+      <div class="sidebar-section-label">FERPA Access Log</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.5">Student data access events only. Required for FERPA compliance review.</div>
+      <button class="btn btn-ferpa" id="btn-ferpa-log">View student access log</button>
+      <button class="btn btn-secondary" style="margin-top:6px;display:none" id="btn-back-full">&#8592; Back to full log</button>
+    </div>
+  </aside>
+  <div class="main">
+    <div class="error-banner" id="error-banner"></div>
+    <div class="toolbar"><div class="toolbar-left"><span class="result-count" id="result-count">Loading…</span><span class="ferpa-badge hidden" id="ferpa-badge">FERPA view</span></div></div>
+    <div class="table-wrap" id="table-wrap"><div class="loading">Loading audit log…</div></div>
+    <div class="pagination"><span class="page-info" id="page-info"></span><div class="page-btns"><button class="page-btn" id="btn-prev" disabled>&#8592; Prev</button><button class="page-btn" id="btn-next" disabled>Next &#8594;</button></div></div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script nonce="{{ request.state.csp_nonce }}">
+let state = { mode: 'full', offset: 0, limit: 100, total: 0 };
+
+document.addEventListener('DOMContentLoaded', () => { loadModules(); loadFullLog(); });
+
+async function loadModules() {
+  try {
+    const resp = await fetch('/api/audit/modules', { headers: { 'X-Requested-With': 'CommandNexus' } });
+    if (!resp.ok) return;
+    const modules = await resp.json();
+    const sel = document.getElementById('f-module');
+    modules.forEach(m => { const o = document.createElement('option'); o.value = m; o.textContent = m; sel.appendChild(o); });
+  } catch (_) {}
+}
+
+function loadFullLog() { state.mode = 'full'; state.offset = 0; document.getElementById('ferpa-badge').classList.add('hidden'); document.getElementById('btn-back-full').style.display = 'none'; fetchAuditLog(); }
+function loadFerpaLog() { state.mode = 'ferpa'; state.offset = 0; document.getElementById('ferpa-badge').classList.remove('hidden'); document.getElementById('btn-back-full').style.display = ''; fetchAuditLog(); }
+function applyFilters() { state.offset = 0; fetchAuditLog(); }
+function clearFilters() { document.getElementById('f-module').value = 'all'; document.getElementById('f-outcome').value = 'all'; document.getElementById('f-actor').value = ''; document.getElementById('f-action').value = ''; document.getElementById('f-days').value = '30'; state.offset = 0; fetchAuditLog(); }
+function prevPage() { if (state.offset <= 0) return; state.offset = Math.max(0, state.offset - state.limit); fetchAuditLog(); }
+function nextPage() { if (state.offset + state.limit >= state.total) return; state.offset += state.limit; fetchAuditLog(); }
+
+async function fetchAuditLog() {
+  setLoading(true); hideError();
+  try {
+    let url, data;
+    if (state.mode === 'ferpa') {
+      url = `/api/audit/student-access?days=${document.getElementById('f-days').value}&limit=${state.limit}`;
+      const resp = await fetch(url, { headers: { 'X-Requested-With': 'CommandNexus' } });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const json = await resp.json();
+      data = { entries: json.entries, total: json.entries.length };
+    } else {
+      const params = new URLSearchParams({ offset: state.offset, limit: state.limit, days: document.getElementById('f-days').value });
+      const module = document.getElementById('f-module').value;
+      const outcome = document.getElementById('f-outcome').value;
+      const actor = document.getElementById('f-actor').value.trim();
+      const action = document.getElementById('f-action').value.trim();
+      if (module !== 'all') params.set('module', module);
+      if (outcome !== 'all') params.set('outcome', outcome);
+      if (actor) params.set('actor', actor);
+      if (action) params.set('action', action);
+      const resp = await fetch(`/api/audit/log?${params}`, { headers: { 'X-Requested-With': 'CommandNexus' } });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      data = await resp.json();
+    }
+    state.total = data.total ?? data.entries.length;
+    renderTable(data.entries); updatePagination();
+  } catch (err) { showError(`Failed to load: ${err.message}`); renderEmpty('Could not load entries.'); }
+  finally { setLoading(false); }
+}
+
+function renderTable(entries) {
+  const wrap = document.getElementById('table-wrap');
+  if (!entries || !entries.length) { renderEmpty('No entries match the current filters.'); return; }
+  const rows = entries.map(e => {
+    const isStudent = e.action && e.action.startsWith('student_data_');
+    const ts = e.created_at ? formatTs(e.created_at) : '\u2014';
+    return `<tr><td><span class="ts">${ts}</span></td><td><span class="actor">${esc(e.actor||'\u2014')}</span></td><td><span class="action${isStudent?' student':''}">${esc(e.action||'\u2014')}</span></td><td><span class="module-pill">${esc(e.module||'\u2014')}</span></td><td><span class="outcome ${e.outcome||''}">${esc(e.outcome||'\u2014')}</span></td><td><span class="target">${esc(e.target||'\u2014')}</span></td><td><span class="details">${esc(e.details||'\u2014')}</span></td><td><span class="cid">${esc((e.correlation_id||'').slice(0,8))}</span></td></tr>`;
+  }).join('');
+  wrap.innerHTML = `<table><thead><tr><th>Timestamp</th><th>Actor</th><th>Action</th><th>Module</th><th>Outcome</th><th>Target</th><th>Details</th><th>Corr. ID</th></tr></thead><tbody>${rows}</tbody></table>`;
+  const count = document.getElementById('result-count');
+  count.innerHTML = state.mode === 'ferpa' ? `<strong>${entries.length}</strong> student access events` : `<strong>${state.total}</strong> total entries`;
+}
+
+function renderEmpty(msg) { document.getElementById('table-wrap').innerHTML = `<div class="empty"><div class="empty-icon">\u25CB</div>${msg}</div>`; document.getElementById('result-count').innerHTML = '<strong>0</strong> entries'; }
+function updatePagination() {
+  const s = state.offset + 1, e = Math.min(state.offset + state.limit, state.total);
+  document.getElementById('page-info').textContent = state.mode === 'ferpa' ? '' : `${s}\u2013${e} of ${state.total}`;
+  document.getElementById('btn-prev').disabled = state.offset <= 0 || state.mode === 'ferpa';
+  document.getElementById('btn-next').disabled = state.mode === 'ferpa' || (state.offset + state.limit >= state.total);
+}
+function setLoading(y) { if (y) document.getElementById('table-wrap').innerHTML = '<div class="loading">Loading\u2026</div>'; }
+function showError(m) { const el = document.getElementById('error-banner'); el.textContent = m; el.style.display = 'block'; }
+function hideError() { document.getElementById('error-banner').style.display = 'none'; }
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function formatTs(iso) { try { return new Date(iso).toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}); } catch(_) { return iso; } }
+
+// CSP forbids inline onclick — wire button handlers here.
+document.getElementById('btn-apply-filters').addEventListener('click', applyFilters);
+document.getElementById('btn-clear-filters').addEventListener('click', clearFilters);
+document.getElementById('btn-ferpa-log').addEventListener('click', loadFerpaLog);
+document.getElementById('btn-back-full').addEventListener('click', loadFullLog);
+document.getElementById('btn-prev').addEventListener('click', prevPage);
+document.getElementById('btn-next').addEventListener('click', nextPage);
+</script>
+{% endblock %}

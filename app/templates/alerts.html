@@ -1,0 +1,698 @@
+{% extends "_base.html" %}
+{% block title %}Alert Routing{% endblock %}
+{% block page_css %}
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font-ui); font-size: 14px; min-height: 100vh; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .content { max-width: 1400px; margin: 24px auto; padding: 0 24px; }
+
+  .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+  .page-title { font-size: 18px; font-weight: 600; }
+
+  /* Push status banner */
+  .push-banner {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 16px; border-radius: 8px; margin-bottom: 20px;
+    border: 1px solid var(--border); background: var(--surface);
+    font-size: 13px;
+  }
+  .push-banner.granted { border-color: rgba(63,185,80,0.3); background: rgba(63,185,80,0.05); }
+  .push-banner.denied  { border-color: rgba(248,81,73,0.3); background: rgba(248,81,73,0.05); }
+  .push-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .push-dot.on  { background: var(--green); }
+  .push-dot.off { background: var(--red); }
+  .push-dot.warn { background: var(--yellow); }
+
+  /* Cards grid */
+  .cards-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
+  @media (max-width: 800px) { .cards-grid { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px;
+  }
+  .card-title { font-size: 13px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; }
+
+  /* Table */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { padding: 8px 10px; text-align: left; font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border); }
+  td { padding: 10px; border-bottom: 1px solid rgba(48,54,61,0.5); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+
+  /* Location badge */
+  .loc-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;
+  }
+  .loc-badge.on-campus  { background: rgba(63,185,80,0.15); color: var(--green); }
+  .loc-badge.off-campus { background: rgba(139,148,158,0.15); color: var(--text-muted); }
+  .loc-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+  /* Tier badge */
+  .tier-badge { display: inline-block; padding: 1px 7px; border-radius: 3px; font-size: 10px; font-weight: 700; }
+  .tier-1 { background: rgba(248,81,73,0.15); color: var(--red); }
+  .tier-3 { background: rgba(139,148,158,0.12); color: var(--text-muted); }
+
+  /* Buttons */
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 6px; font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: var(--surface2); color: var(--text); font-family: inherit; transition: background 0.15s; }
+  .btn:hover { background: var(--border); }
+  .btn-primary { background: var(--accent); border-color: var(--accent); color: #000; }
+  .btn-primary:hover { background: #79b8ff; }
+  .btn-danger { border-color: rgba(248,81,73,0.4); color: var(--red); }
+  .btn-danger:hover { background: rgba(248,81,73,0.1); }
+  .btn-sm { padding: 4px 10px; font-size: 11px; }
+
+  /* Info row under routing */
+  .routing-legend {
+    display: flex; gap: 16px; flex-wrap: wrap; margin-top: 16px;
+    padding-top: 16px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text-muted);
+  }
+  .routing-row { display: flex; align-items: center; gap: 6px; }
+
+  /* Modal */
+  .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; align-items: center; justify-content: center; }
+  .modal-bg.open { display: flex; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 24px; min-width: 380px; max-width: 520px; width: 90%; }
+  .modal-title { font-size: 15px; font-weight: 600; margin-bottom: 20px; }
+  .form-group { margin-bottom: 14px; }
+  .form-label { font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 5px; }
+  .form-input {
+    width: 100%; padding: 8px 10px; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text); font-size: 13px; font-family: inherit;
+  }
+  .form-input:focus { outline: none; border-color: var(--accent); }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+
+  /* VAPID section */
+  .vapid-key { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); word-break: break-all; background: var(--surface2); padding: 8px 10px; border-radius: 6px; margin-top: 8px; }
+
+  /* Time band viz */
+  .time-band { display: flex; gap: 0; margin-top: 12px; border-radius: 6px; overflow: hidden; font-size: 11px; }
+  .tb-business { flex: 14; background: rgba(63,185,80,0.15); color: var(--green); padding: 5px 8px; text-align: center; }
+  .tb-quiet    { flex: 10; background: rgba(139,148,158,0.1); color: var(--text-muted); padding: 5px 8px; text-align: center; }
+
+  .empty { color: var(--text-muted); font-size: 13px; padding: 20px; text-align: center; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="content">
+  <div class="infra-nav">
+    <a class="infra-tab" href="/network">Network</a>
+    <a class="infra-tab" href="/chromebook">Chromebooks</a>
+    <a class="infra-tab active" href="/alerts">Alert Routing</a>
+    <a class="infra-tab" href="/noc" target="_blank">NOC</a>
+  </div>
+
+  <div class="page-header">
+    <h1 class="page-title">Alert Routing</h1>
+    <button class="btn btn-sm" id="btn-refresh-locations">&#8635; Refresh Locations</button>
+  </div>
+
+  <!-- Push notification status -->
+  <div class="push-banner" id="push-banner">
+    <div class="push-dot warn" id="push-dot"></div>
+    <span id="push-status-text">Checking push notification status&hellip;</span>
+    <button class="btn btn-sm" id="push-action-btn" style="margin-left:auto;display:none"></button>
+  </div>
+
+  <div class="cards-grid">
+    <!-- Tech team (= voice recipients with routing fields) -->
+    <div class="card" style="grid-column: 1 / -1;">
+      <div class="card-title">
+        Alert Recipients
+        <span style="font-size:11px;font-weight:400;color:var(--text-muted)" id="last-location-update"></span>
+      </div>
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Recipients are managed in <a href="/voice">Voice Settings</a>. Set MAC address and home coordinates here to enable location-aware routing.</p>
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Label</th>
+            <th>Phone MAC</th>
+            <th>Current Location</th>
+            <th>Push Subs</th>
+            <th>Threshold</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tech-tbody">
+          <tr><td colspan="7" class="empty">Loading&hellip;</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Buildings -->
+    <div class="card">
+      <div class="card-title">Alert Buildings</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>Name</th>
+            <th>Tier</th>
+            <th>P1 Pattern</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="buildings-tbody">
+          <tr><td colspan="5" class="empty">Loading&hellip;</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Routing rules -->
+    <div class="card">
+      <div class="card-title">Routing Rules</div>
+
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Time bands</div>
+      <div class="time-band">
+        <div class="tb-business">Business 06:00&ndash;20:00<br>Voice + Push for P1/P2</div>
+        <div class="tb-quiet">Quiet 20:00&ndash;06:00<br>Push only (multi-P1 → Voice)</div>
+      </div>
+
+      <div class="routing-legend">
+        <div class="routing-row"><span style="color:var(--red)">&#9679;</span> P1 — Building / main office down</div>
+        <div class="routing-row"><span style="color:var(--yellow)">&#9679;</span> P2 — Wing closet / classroom down</div>
+        <div class="routing-row"><span style="color:var(--text-muted)">&#9679;</span> P3 — Individual device</div>
+      </div>
+
+      <div style="margin-top:16px;font-size:12px;color:var(--text-muted);">Dispatch order</div>
+      <div style="margin-top:8px;font-size:12px;line-height:1.7;">
+        Techs are sorted by <strong>distance</strong> from their current position (on-campus AP location or home address) to the affected building. Tie-breaks use priority order.
+      </div>
+
+      <!-- VAPID -->
+      <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);">
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">VAPID Push Keys</div>
+        <div class="vapid-key" id="vapid-pub-key">Not configured</div>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <button class="btn btn-sm" id="btn-generate-vapid">Generate Keys</button>
+          <button class="btn btn-sm" id="btn-test-push-all">Test Push (All)</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Per-module alert channel overrides ────────────────────────── -->
+  <div class="card" style="grid-column: 1 / -1; margin-top:16px">
+    <div class="card-title">Alert Channels by Source Module</div>
+    <p style="font-size:12px;color:var(--text-muted);margin:6px 0 12px 0;">
+      Silence a class of alert (or elevate it) without touching per-recipient settings. Per-recipient toggles still apply on top — this is an additional filter.
+      Missing check = channel disabled for this module. <b>Min voice sev</b> only fires voice when the alert's severity meets or exceeds this floor (blank = respect recipient config).
+    </p>
+    <table class="data-table" id="module-overrides-table" style="width:100%">
+      <thead>
+        <tr>
+          <th style="text-align:left">Module</th>
+          <th style="text-align:center;width:70px">Push</th>
+          <th style="text-align:center;width:70px">Voice</th>
+          <th style="text-align:center;width:70px">Cast</th>
+          <th style="text-align:center;width:70px">Email</th>
+          <th style="text-align:center;width:110px">Min voice sev</th>
+          <th style="text-align:center;width:70px" title="Bypass quiet hours">24/7</th>
+        </tr>
+      </thead>
+      <tbody id="module-overrides-body">
+        <tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:20px">Loading&hellip;</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Routing fields modal (MAC + home coords only — call config is in Voice Settings) -->
+<div class="modal-bg" id="tech-modal">
+  <div class="modal">
+    <div class="modal-title" id="tech-modal-title">Routing Settings</div>
+    <input type="hidden" id="tm-id">
+    <div class="form-group">
+      <label class="form-label">Phone WiFi MAC <span style="color:var(--text-muted);font-weight:400">(for on-campus detection)</span></label>
+      <input class="form-input" id="tm-mac" placeholder="AA:BB:CC:DD:EE:FF">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Home Latitude</label>
+        <input class="form-input" id="tm-lat" placeholder="38.761..." type="number" step="any">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Home Longitude</label>
+        <input class="form-input" id="tm-lon" placeholder="-83.034..." type="number" step="any">
+      </div>
+    </div>
+    <p style="font-size:11px;color:var(--text-muted);margin-top:4px;">Home coordinates are used when the phone MAC is not seen on campus WiFi.</p>
+    <div class="modal-actions">
+      <button class="btn" id="btn-cancel-tech">Cancel</button>
+      <button class="btn btn-primary" id="btn-save-tech">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Building Modal -->
+<div class="modal-bg" id="building-modal">
+  <div class="modal">
+    <div class="modal-title">Edit Building</div>
+    <input type="hidden" id="bm-id">
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Code</label>
+        <input class="form-input" id="bm-code" disabled>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Tier</label>
+        <select class="form-input" id="bm-tier">
+          <option value="1">1 — Critical</option>
+          <option value="3">3 — Low</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Display Name</label>
+      <input class="form-input" id="bm-name">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Latitude</label>
+        <input class="form-input" id="bm-lat" type="number" step="any">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Longitude</label>
+        <input class="form-input" id="bm-lon" type="number" step="any">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">P1 Device Pattern (LibreNMS sysname prefix)</label>
+      <input class="form-input" id="bm-pattern" placeholder="pes-mc">
+    </div>
+    <div class="modal-actions">
+      <button class="btn" id="btn-cancel-building">Cancel</button>
+      <button class="btn btn-primary" id="btn-save-building">Save</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script nonce="{{ request.state.csp_nonce }}">
+const H = {'X-Requested-With': 'XMLHttpRequest'};
+let _recipients = [], _buildings = [], _myRecipientId = null;
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+
+async function init() {
+  await Promise.all([loadRecipients(), loadBuildings(), loadModuleOverrides()]);
+  await initPush();
+  loadVapidKey();
+}
+
+// ── Module overrides ─────────────────────────────────────────────────────────
+
+let _modOverrides = [];
+
+async function loadModuleOverrides() {
+  const data = await fetch('/api/alerts/module-overrides', {headers: H}).then(r => r.json());
+  _modOverrides = data.modules || [];
+  renderModuleOverrides();
+}
+
+function renderModuleOverrides() {
+  const body = document.getElementById('module-overrides-body');
+  if (!body) return;
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g,
+    c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const opts = ['', 'low', 'medium', 'high', 'critical'].map(v =>
+    `<option value="${v}">${v || '(any)'}</option>`).join('');
+  body.innerHTML = _modOverrides.map(m => `
+    <tr data-module="${esc(m.source_module)}">
+      <td>
+        <b>${esc(m.source_module)}</b>
+        <div style="font-size:11px;color:var(--text-muted)">${esc(m.description)}</div>
+      </td>
+      <td style="text-align:center"><input type="checkbox" data-action="mo-toggle" data-field="push_enabled" ${m.push_enabled ? 'checked' : ''}></td>
+      <td style="text-align:center"><input type="checkbox" data-action="mo-toggle" data-field="voice_enabled" ${m.voice_enabled ? 'checked' : ''}></td>
+      <td style="text-align:center"><input type="checkbox" data-action="mo-toggle" data-field="cast_enabled" ${m.cast_enabled ? 'checked' : ''}></td>
+      <td style="text-align:center"><input type="checkbox" data-action="mo-toggle" data-field="email_enabled" ${m.email_enabled ? 'checked' : ''}></td>
+      <td style="text-align:center">
+        <select data-action="mo-min-sev" style="padding:2px 4px;font-size:12px;background:var(--bg);border:1px solid var(--border);border-radius:3px;color:var(--text)">
+          ${opts.replace('value="'+(m.min_severity_voice||'')+'"', 'value="'+(m.min_severity_voice||'')+'" selected')}
+        </select>
+      </td>
+      <td style="text-align:center"><input type="checkbox" data-action="mo-toggle" data-field="quiet_hours_bypass" ${m.quiet_hours_bypass ? 'checked' : ''}></td>
+    </tr>`).join('');
+}
+
+async function saveModuleOverride(sourceModule) {
+  const row = document.querySelector(`#module-overrides-body tr[data-module="${sourceModule}"]`);
+  if (!row) return;
+  const body = {
+    push_enabled:       row.querySelector('[data-field="push_enabled"]').checked,
+    voice_enabled:      row.querySelector('[data-field="voice_enabled"]').checked,
+    cast_enabled:       row.querySelector('[data-field="cast_enabled"]').checked,
+    email_enabled:      row.querySelector('[data-field="email_enabled"]').checked,
+    min_severity_voice: row.querySelector('[data-action="mo-min-sev"]').value || null,
+    quiet_hours_bypass: row.querySelector('[data-field="quiet_hours_bypass"]').checked,
+  };
+  const r = await fetch(`/api/alerts/module-overrides/${encodeURIComponent(sourceModule)}`,
+    {method: 'PATCH', headers: {...H, 'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+  if (!r.ok) { alert('Save failed: ' + await r.text()); }
+}
+
+document.addEventListener('change', e => {
+  const el = e.target.closest('[data-action="mo-toggle"], [data-action="mo-min-sev"]');
+  if (!el) return;
+  const row = el.closest('tr[data-module]');
+  if (row) saveModuleOverride(row.dataset.module);
+});
+
+// ── Recipient list ────────────────────────────────────────────────────────────
+
+async function loadRecipients() {
+  const data = await fetch('/api/alerts/recipients', {headers: H}).then(r => r.json());
+  _recipients = data;
+  renderRecipients();
+  document.getElementById('last-location-update').textContent = 'Locations as of ' + new Date().toLocaleTimeString();
+}
+
+function renderRecipients() {
+  const tbody = document.getElementById('tech-tbody');
+  if (!_recipients.length) { tbody.innerHTML = '<tr><td colspan="7" class="empty">No recipients configured — add them in Voice Settings</td></tr>'; return; }
+
+  tbody.innerHTML = _recipients.map(r => {
+    const loc = r.current_location;
+    const locHtml = loc
+      ? `<span class="loc-badge on-campus"><span class="loc-dot"></span>${esc(loc)}</span>`
+      : `<span class="loc-badge off-campus"><span class="loc-dot"></span>Off Campus</span>`;
+    const macSet = r.mac_address ? '' : ' style="color:var(--yellow)"';
+    const coordSet = (r.home_lat && r.home_lon) ? '' : ' style="color:var(--yellow)"';
+
+    return `<tr>
+      <td style="color:var(--text-muted)">${r.priority_order}</td>
+      <td>
+        <span style="font-weight:500">${esc(r.label)}</span>
+        ${r.active ? '' : '<span style="color:var(--red);font-size:10px;margin-left:6px">INACTIVE</span>'}
+      </td>
+      <td style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted)"${macSet}>${esc(r.mac_address || '⚠ not set')}</td>
+      <td>${locHtml}</td>
+      <td>
+        <span style="font-size:12px;color:var(--text-muted)">${r.push_subscriptions} sub${r.push_subscriptions !== 1 ? 's' : ''}</span>
+        <button class="btn btn-sm" data-action="testPushRecipient" data-id="${r.id}" title="Test push" style="margin-left:6px">&#128276;</button>
+        <button class="btn btn-sm" data-action="subscribePush" data-id="${r.id}" title="Subscribe this browser">&#43;</button>
+      </td>
+      <td style="font-size:11px;color:var(--text-muted)">${esc(r.severity_threshold)}</td>
+      <td><button class="btn btn-sm" data-action="openEditRouting" data-id="${r.id}">Routing&hellip;</button></td>
+    </tr>`;
+  }).join('');
+}
+
+async function refreshLocations() {
+  await loadRecipients();
+}
+
+// ── Buildings ─────────────────────────────────────────────────────────────────
+
+async function loadBuildings() {
+  const data = await fetch('/api/alerts/buildings', {headers: H}).then(r => r.json());
+  _buildings = data;
+  renderBuildings();
+}
+
+function renderBuildings() {
+  const tbody = document.getElementById('buildings-tbody');
+  if (!_buildings.length) { tbody.innerHTML = '<tr><td colspan="5" class="empty">No buildings</td></tr>'; return; }
+
+  tbody.innerHTML = _buildings.map(b => {
+    const tier = b.tier === 1
+      ? '<span class="tier-badge tier-1">Critical</span>'
+      : '<span class="tier-badge tier-3">Low</span>';
+    return `<tr>
+      <td style="font-family:var(--font-mono);font-weight:700">${esc(b.code)}</td>
+      <td>${esc(b.name)}</td>
+      <td>${tier}</td>
+      <td style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted)">${esc(b.p1_device_pattern || '—')}</td>
+      <td><button class="btn btn-sm" data-action="openEditBuilding" data-id="${b.id}">Edit</button></td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Routing fields modal ──────────────────────────────────────────────────────
+
+function openEditRouting(id) {
+  const r = _recipients.find(x => x.id === id);
+  if (!r) return;
+  document.getElementById('tech-modal-title').textContent = `Routing — ${r.label}`;
+  document.getElementById('tm-id').value = r.id;
+  document.getElementById('tm-mac').value = r.mac_address || '';
+  document.getElementById('tm-lat').value = r.home_lat || '';
+  document.getElementById('tm-lon').value = r.home_lon || '';
+  document.getElementById('tech-modal').classList.add('open');
+}
+
+function closeTechModal() {
+  document.getElementById('tech-modal').classList.remove('open');
+}
+
+async function saveTech() {
+  const id = document.getElementById('tm-id').value;
+  const payload = {
+    mac_address: document.getElementById('tm-mac').value.trim() || null,
+    home_lat: parseFloat(document.getElementById('tm-lat').value) || null,
+    home_lon: parseFloat(document.getElementById('tm-lon').value) || null,
+  };
+
+  const r = await fetch(`/api/alerts/recipients/${id}/routing`, {
+    method: 'PATCH',
+    headers: {...H, 'Content-Type': 'application/json'},
+    body: JSON.stringify(payload),
+  });
+  if (!r.ok) { alert('Save failed'); return; }
+  closeTechModal();
+  loadRecipients();
+}
+
+// ── Building modal ────────────────────────────────────────────────────────────
+
+function openEditBuilding(id) {
+  const b = _buildings.find(x => x.id === id);
+  if (!b) return;
+  document.getElementById('bm-id').value = b.id;
+  document.getElementById('bm-code').value = b.code;
+  document.getElementById('bm-name').value = b.name;
+  document.getElementById('bm-tier').value = b.tier;
+  document.getElementById('bm-lat').value = b.lat;
+  document.getElementById('bm-lon').value = b.lon;
+  document.getElementById('bm-pattern').value = b.p1_device_pattern || '';
+  document.getElementById('building-modal').classList.add('open');
+}
+
+function closeBuildingModal() {
+  document.getElementById('building-modal').classList.remove('open');
+}
+
+async function saveBuilding() {
+  const id = document.getElementById('bm-id').value;
+  const payload = {
+    name: document.getElementById('bm-name').value.trim(),
+    tier: parseInt(document.getElementById('bm-tier').value),
+    lat: parseFloat(document.getElementById('bm-lat').value),
+    lon: parseFloat(document.getElementById('bm-lon').value),
+    p1_device_pattern: document.getElementById('bm-pattern').value.trim() || null,
+  };
+  const r = await fetch(`/api/alerts/buildings/${id}`, {method: 'PUT', headers: {...H, 'Content-Type': 'application/json'}, body: JSON.stringify(payload)});
+  if (!r.ok) { alert('Save failed'); return; }
+  closeBuildingModal();
+  loadBuildings();
+}
+
+// ── VAPID ─────────────────────────────────────────────────────────────────────
+
+async function loadVapidKey() {
+  const r = await fetch('/api/alerts/vapid/public-key', {headers: H});
+  if (r.ok) {
+    const data = await r.json();
+    document.getElementById('vapid-pub-key').textContent = data.public_key;
+  }
+}
+
+async function generateVapid() {
+  if (!confirm('Generate new VAPID keys? All existing push subscriptions will stop working and need to be re-registered.')) return;
+  const r = await fetch('/api/alerts/vapid/generate', {method: 'POST', headers: H});
+  if (r.ok) {
+    const data = await r.json();
+    document.getElementById('vapid-pub-key').textContent = data.public_key;
+    alert('Keys generated. All browsers must re-subscribe to push alerts.');
+  }
+}
+
+// ── Web Push ──────────────────────────────────────────────────────────────────
+
+let _swReg = null;
+
+async function initPush() {
+  const banner  = document.getElementById('push-banner');
+  const dot     = document.getElementById('push-dot');
+  const text    = document.getElementById('push-status-text');
+  const btn     = document.getElementById('push-action-btn');
+
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    dot.className = 'push-dot off';
+    text.textContent = 'Push notifications not supported in this browser.';
+    return;
+  }
+
+  try {
+    _swReg = await navigator.serviceWorker.register('/static/sw.js');
+  } catch (e) {
+    dot.className = 'push-dot off';
+    text.textContent = 'Service worker failed to register: ' + e.message;
+    return;
+  }
+
+  const perm = Notification.permission;
+  if (perm === 'denied') {
+    dot.className = 'push-dot off';
+    banner.classList.add('denied');
+    text.textContent = 'Push notifications blocked. Allow in browser site settings.';
+    return;
+  }
+
+  const sub = await _swReg.pushManager.getSubscription();
+  if (sub) {
+    dot.className = 'push-dot on';
+    banner.classList.add('granted');
+    text.textContent = 'Push notifications active for this browser.';
+    btn.textContent = 'Unsubscribe';
+    btn.style.display = 'inline-flex';
+    btn.onclick = unsubscribePush;
+  } else {
+    dot.className = 'push-dot warn';
+    text.textContent = 'Push notifications not enabled for this browser.';
+    btn.textContent = 'Enable Alerts';
+    btn.style.display = 'inline-flex';
+    btn.onclick = () => promptAndSubscribe();
+  }
+}
+
+async function promptAndSubscribe() {
+  if (!_myRecipientId && _recipients.length > 0) {
+    const label = prompt('Enter your label (e.g. "tim", "mark", "chance"):');
+    if (!label) return;
+    const rec = _recipients.find(r => r.label.toLowerCase().includes(label.trim().toLowerCase()));
+    if (!rec) { alert('Recipient not found: ' + label); return; }
+    _myRecipientId = rec.id;
+  }
+  if (!_myRecipientId) { alert('No recipients configured.'); return; }
+  await subscribePush(_myRecipientId);
+}
+
+async function subscribePush(recipientId) {
+  if (!_swReg) { alert('Service worker not ready.'); return; }
+
+  const perm = await Notification.requestPermission();
+  if (perm !== 'granted') { alert('Permission denied.'); return; }
+
+  const keyResp = await fetch('/api/alerts/vapid/public-key', {headers: H});
+  if (!keyResp.ok) { alert('VAPID keys not configured. Generate them first.'); return; }
+  const { public_key } = await keyResp.json();
+
+  let sub = await _swReg.pushManager.getSubscription();
+  if (sub) await sub.unsubscribe();
+
+  sub = await _swReg.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: _urlBase64ToUint8Array(public_key),
+  });
+
+  const subJson = sub.toJSON();
+  await fetch('/api/alerts/push/subscribe', {
+    method: 'POST',
+    headers: {...H, 'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      recipient_id: recipientId,
+      endpoint: subJson.endpoint,
+      p256dh: subJson.keys.p256dh,
+      auth: subJson.keys.auth,
+      user_agent: navigator.userAgent.slice(0, 200),
+    }),
+  });
+
+  _myRecipientId = recipientId;
+  alert('Push notifications enabled!');
+  initPush();
+}
+
+async function unsubscribePush() {
+  if (!_swReg) return;
+  const sub = await _swReg.pushManager.getSubscription();
+  if (sub) {
+    await fetch('/api/alerts/push/subscribe', {
+      method: 'DELETE',
+      headers: {...H, 'Content-Type': 'application/json'},
+      body: JSON.stringify({endpoint: sub.endpoint}),
+    });
+    await sub.unsubscribe();
+  }
+  initPush();
+}
+
+async function testPushRecipient(recipientId) {
+  const r = await fetch('/api/alerts/push/test', {
+    method: 'POST',
+    headers: {...H, 'Content-Type': 'application/json'},
+    body: JSON.stringify({recipient_id: recipientId, title: 'Nexus Test', body: 'Test push from Command Nexus'}),
+  });
+  const d = await r.json();
+  alert(`Sent ${d.sent} push(es)`);
+}
+
+async function testPushAll() {
+  const r = await fetch('/api/alerts/push/test', {
+    method: 'POST',
+    headers: {...H, 'Content-Type': 'application/json'},
+    body: JSON.stringify({title: 'Nexus Test Alert', body: 'Test from Command Nexus — all techs'}),
+  });
+  const d = await r.json();
+  const total = typeof d.sent === 'object' ? Object.values(d.sent).reduce((a,b)=>a+b,0) : d.sent;
+  alert(`Sent ${total} push(es) total`);
+}
+
+// ── Util ──────────────────────────────────────────────────────────────────────
+
+function _urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  return Uint8Array.from(raw, c => c.charCodeAt(0));
+}
+
+function esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+document.getElementById('tech-modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeTechModal(); });
+document.getElementById('building-modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeBuildingModal(); });
+
+// Wire static event handlers (CSP disallows inline event attributes).
+document.getElementById('btn-refresh-locations').addEventListener('click', refreshLocations);
+document.getElementById('btn-generate-vapid').addEventListener('click', generateVapid);
+document.getElementById('btn-test-push-all').addEventListener('click', testPushAll);
+document.getElementById('btn-cancel-tech').addEventListener('click', closeTechModal);
+document.getElementById('btn-save-tech').addEventListener('click', saveTech);
+document.getElementById('btn-cancel-building').addEventListener('click', closeBuildingModal);
+document.getElementById('btn-save-building').addEventListener('click', saveBuilding);
+
+// Delegated handlers for dynamically-rendered recipient/building rows.
+document.querySelector('.content').addEventListener('click', (e) => {
+  const el = e.target.closest('[data-action]');
+  if (!el) return;
+  const id = parseInt(el.dataset.id, 10);
+  switch (el.dataset.action) {
+    case 'testPushRecipient': testPushRecipient(id); break;
+    case 'subscribePush':     subscribePush(id); break;
+    case 'openEditRouting':   openEditRouting(id); break;
+    case 'openEditBuilding':  openEditBuilding(id); break;
+  }
+});
+
+init();
+</script>
+{% endblock %}

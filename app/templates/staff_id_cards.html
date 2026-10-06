@@ -1,0 +1,166 @@
+{% extends "_base.html" %}
+{% block title %}ID Card Queue{% endblock %}
+{% block page_css %}
+<style>
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 13px; margin: 0; }
+  .main { padding: 20px 24px; max-width: 1400px; margin: 0 auto; }
+  .page-title { font-size: 18px; font-weight: 600; margin: 0 0 6px; }
+  .page-sub { font-size: 12px; color: var(--muted); margin-bottom: 20px; }
+  .filters { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .chip { padding: 5px 12px; border: 1px solid var(--border); border-radius: 14px; font-size: 12px; color: var(--muted); background: var(--surface2); cursor: pointer; user-select: none; }
+  .chip:hover { color: var(--text); border-color: var(--accent); }
+  .chip.active { color: var(--text); background: var(--surface); border-color: var(--accent); }
+  .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px; display: flex; gap: 14px; align-items: flex-start; }
+  .card .thumb { width: 100px; height: 106px; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; flex-shrink: 0; background: var(--surface2); display: flex; align-items: center; justify-content: center; }
+  .card .thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .card .thumb .noimg { font-size: 10px; color: var(--muted); text-align: center; padding: 8px; }
+  .card .body { flex: 1; min-width: 0; }
+  .card .name { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
+  .card .sub { font-size: 11px; color: var(--muted); margin-bottom: 8px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; }
+  .card .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .card button, .card a.btn { padding: 5px 10px; font-size: 11px; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
+  .card .btn-primary { background: var(--accent); color: #0d1117; border: 0; font-weight: 600; }
+  .card .btn-secondary { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  .card .btn-secondary:hover { color: var(--text); border-color: var(--accent); }
+  .card .btn-danger { background: transparent; color: var(--red); border: 1px solid var(--red); opacity: 0.7; }
+  .card .btn-danger:hover { opacity: 1; }
+  .status-pill { font-size: 10px; padding: 1px 6px; border-radius: 3px; margin-left: 6px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .status-ready { background: rgba(63,185,80,0.15); color: var(--green); }
+  .status-pending { background: rgba(210,153,34,0.15); color: var(--yellow); }
+  .status-printed { background: rgba(88,166,255,0.15); color: var(--accent); }
+  .empty { text-align: center; padding: 40px; color: var(--muted); font-size: 12px; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="main">
+  <h1 class="page-title">ID Card Queue</h1>
+  <div class="page-sub">Staff whose real Paxton PVC card is queued for print. Photos have already been auto-oriented + face-cropped. Preview each card before printing.</div>
+
+  <div class="filters" id="filters">
+    <span class="chip active" data-status="ready">Ready to print</span>
+    <span class="chip" data-status="pending_photo">Waiting for photo</span>
+    <span class="chip" data-status="printed">Printed</span>
+    <span class="chip" data-status="all">All (open)</span>
+  </div>
+
+  <div id="body"><div class="empty">Loading…</div></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script nonce="{{ request.state.csp_nonce }}">
+const H = {'X-Requested-With': 'CommandNexus', 'Content-Type': 'application/json'};
+const esc = s => (s == null ? '' : String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])));
+let STATUS = 'ready';
+
+async function load() {
+  document.getElementById('body').innerHTML = '<div class="empty">Loading…</div>';
+  try {
+    const r = await fetch(`/api/staff/id-cards?status=${STATUS}`, {credentials: 'same-origin'});
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    render(data.entries || []);
+  } catch (e) {
+    document.getElementById('body').innerHTML = `<div class="empty">Failed to load: ${esc(e.message)}</div>`;
+  }
+}
+
+function render(entries) {
+  if (!entries.length) {
+    document.getElementById('body').innerHTML = `<div class="empty">Nothing in the "${esc(STATUS)}" bucket.</div>`;
+    return;
+  }
+  const html = entries.map(row => {
+    const email = row.expected_email || row.email || '';
+    const name = `${row.first_name || ''} ${row.last_name || ''}`.trim() || '(no name)';
+    const title = row.title || row.position || '';
+    const bldg = row.building || '';
+    // Thumbnail comes from the same processed photo file (queue_<id>.jpg)
+    // that the ID card render pulls from. Cache-bust on updated_at so
+    // a photo replace shows fresh.
+    const thumbUrl = `/api/staff/queue/${row.id}/photo?v=${encodeURIComponent(row.id_card_updated_at || '')}`;
+    const statusCls = {
+      ready: 'status-ready',
+      pending_photo: 'status-pending',
+      printed: 'status-printed',
+    }[row.id_card_status] || 'status-pending';
+    const pdfUrl = email ? `/api/staff/id-card/${encodeURIComponent(email)}?format=pdf` : null;
+
+    return `<div class="card" data-item-id="${row.id}">
+      <div class="thumb">
+        ${row.photo_path
+          ? `<img src="${thumbUrl}" alt="">`
+          : `<div class="noimg">no photo yet</div>`}
+      </div>
+      <div class="body">
+        <div class="name">${esc(name)}<span class="status-pill ${statusCls}">${esc(row.id_card_status || '')}</span></div>
+        <div class="sub">${esc(title)}${title && bldg ? ' · ' : ''}${esc(bldg)}<br>${esc(email)}</div>
+        <div class="actions">
+          ${pdfUrl ? `<a class="btn btn-primary" href="${pdfUrl}" target="_blank">Print PDF</a>` : ''}
+          <button class="btn-secondary" data-action="replace-photo" data-item-id="${row.id}">Replace photo</button>
+          ${row.id_card_status === 'ready'
+            ? `<button class="btn-secondary" data-action="mark-printed" data-item-id="${row.id}">Mark printed</button>` : ''}
+          <button class="btn-danger" data-action="skip" data-item-id="${row.id}">Skip</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('body').innerHTML = `<div class="grid">${html}</div>`;
+}
+
+document.getElementById('filters').addEventListener('click', e => {
+  const chip = e.target.closest('[data-status]');
+  if (!chip) return;
+  document.querySelectorAll('#filters .chip').forEach(c => c.classList.toggle('active', c === chip));
+  STATUS = chip.dataset.status;
+  load();
+});
+
+async function markPrinted(id) {
+  if (!confirm('Mark this card as printed and clear it from the queue?')) return;
+  const r = await fetch(`/api/staff/id-cards/${id}/mark-printed`, {method: 'POST', credentials: 'same-origin', headers: H});
+  if (!r.ok) { alert('Failed: ' + await r.text()); return; }
+  load();
+}
+
+async function skipCard(id) {
+  if (!confirm('Skip this card? Row is dismissed and won\'t come back to the queue unless re-opened manually.')) return;
+  const r = await fetch(`/api/staff/id-cards/${id}/skip`, {method: 'POST', credentials: 'same-origin', headers: H});
+  if (!r.ok) { alert('Failed: ' + await r.text()); return; }
+  load();
+}
+
+function replacePhoto(id) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.addEventListener('change', async () => {
+    if (!input.files.length) return;
+    const fd = new FormData();
+    fd.append('file', input.files[0]);
+    const r = await fetch(`/api/staff/queue/${id}/photo`, {method: 'POST', credentials: 'same-origin', headers: {'X-Requested-With': 'CommandNexus'}, body: fd});
+    if (!r.ok) { alert('Upload failed: ' + await r.text()); return; }
+    const j = await r.json();
+    const note = j.processed
+      ? (j.face_found ? 'Photo processed — face detected.' : 'Photo processed — no face detected, using center crop.')
+      : `Photo saved but processing failed: ${j.reason}`;
+    alert(note);
+    load();
+  });
+  input.click();
+}
+
+document.getElementById('body').addEventListener('click', e => {
+  const el = e.target.closest('[data-action]');
+  if (!el) return;
+  const id = parseInt(el.dataset.itemId, 10);
+  switch (el.dataset.action) {
+    case 'mark-printed': markPrinted(id); break;
+    case 'skip': skipCard(id); break;
+    case 'replace-photo': replacePhoto(id); break;
+  }
+});
+
+load();
+</script>
+{% endblock %}
