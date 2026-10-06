@@ -229,6 +229,70 @@ That's it — no DWD, no scopes list, no admin console changes needed
 for the OAuth client. The service account's DWD is a totally separate
 authorization that governs backend API access.
 
+# Local auth (optional, feature-flagged) — ~5 min
+
+Secondary login path alongside Google SSO. Useful for break-glass
+admin, non-Workspace users, and service accounts that need to call
+Nexus's API without Google. Google SSO stays the primary path.
+
+## Enable
+
+In `.env`:
+```
+LOCAL_AUTH_ENABLED=true
+```
+
+That's it — the login page will show a "Use a local account instead"
+toggle on next boot. Set it back to `false` to remove all local-auth
+code paths (routes, settings panel, default admin) with zero attack
+surface.
+
+## Default admin on first boot
+
+If `LOCAL_AUTH_ENABLED=true` AND the `local_users` table is empty,
+the API creates a default admin on first boot:
+
+| Field | Value |
+|-|-|
+| Email | `admin@local` |
+| Password | `changeme123!` |
+| `must_change_password` | `true` |
+
+The first time anyone logs in with these creds, Nexus FORCES a
+password reset before letting them reach any other page. You can
+skip this bootstrap by running `scripts/first_run.sh` with the flag
+enabled — it prompts for a real email + password and seeds that
+instead.
+
+## Managing accounts after boot
+
+**Settings → Access → Local Accounts** (admin only).
+
+Shows every local account with email, name, admin/active flags,
+last login, and a "(must change pw)" marker where applicable.
+Per-row actions:
+- **Reset pw** — prompt for a new password; user is forced to change
+  it again on next login
+- **Disable / Enable** — soft-disable without deleting (audit trail
+  preserved)
+- **Make admin / Revoke admin** — toggle the admin bit
+- **Delete** — permanent
+
+Add-account form at the bottom: email, display name, password
+(≥ 12 chars), admin checkbox.
+
+## Security defaults
+
+- argon2id password hashing (OWASP-recommended)
+- Per-email failure lockout: 5 attempts within 15 minutes → 15-minute
+  lockout. Tune via `LOCAL_AUTH_LOCKOUT_FAILURES` and
+  `LOCAL_AUTH_LOCKOUT_WINDOW_SEC` env vars if your policy differs.
+- All login attempts audit-logged (success + failure)
+- Session cookie identical to the Google flow — downstream middleware
+  can't distinguish the two auth paths
+- Admin resets automatically set `must_change_password=true` unless
+  the admin passes `skip_force_change=true` on the PATCH
+
 # TLS setup — pick ONE path
 
 Everything after this assumes you have a `DOMAIN` set in `.env` that
