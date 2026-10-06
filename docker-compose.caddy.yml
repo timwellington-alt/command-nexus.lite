@@ -1,0 +1,47 @@
+# Caddy reverse-proxy override — opt-in alternative to the default
+# nginx service. Caddy auto-provisions + auto-renews Let's Encrypt
+# certs with no cron / no manual cert management.
+#
+# Use it:
+#   docker compose -f docker-compose.yml -f docker-compose.caddy.yml up -d
+#
+# Requirements:
+#   - DOMAIN in .env is a real domain that resolves to this host
+#   - Ports 80 + 443 reachable from the public Internet (so the ACME
+#     HTTP-01 challenge works; Caddy also tries TLS-ALPN automatically)
+#   - CADDY_ACME_EMAIL in .env is a mailbox you check (expiry alerts
+#     from Let's Encrypt go here)
+#
+# What this override does:
+#   - Disables the stock nginx service (profiles: ["disabled"])
+#   - Adds caddy service listening on 80 + 443, config in ./Caddyfile
+#   - Named volumes persist Caddy's cert cache so renewals don't
+#     re-request from Let's Encrypt on every container restart
+services:
+  nginx:
+    profiles: ["disabled"]
+
+  caddy:
+    image: caddy:2
+    container_name: nexus-lite-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"   # HTTP/3
+    environment:
+      DOMAIN: ${DOMAIN}
+      CADDY_ACME_EMAIL: ${CADDY_ACME_EMAIL:-admin@yourdistrict.org}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data       # cert cache + account keys
+      - caddy-config:/config
+    networks:
+      - nexus-internal
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  caddy-data:
+  caddy-config:

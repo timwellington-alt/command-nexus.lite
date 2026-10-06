@@ -39,12 +39,21 @@ gen_secret secrets/settings_encryption_key  "python3 -c 'from cryptography.ferne
 # Google OAuth client (for the web login flow) — separate from the
 # service account. Prompted only if not already set.
 if [ ! -s secrets/google_client_id ]; then
-    read -p "Google OAuth client ID (for user login): " gci
+    echo
+    echo "  Google OAuth 2.0 Client ID (for user Sign-In)."
+    echo "  Create one at https://console.cloud.google.com/apis/credentials"
+    echo "  → Create Credentials → OAuth client ID → Web application"
+    echo "  → Authorized redirect URI: https://<your-domain>/auth/callback"
+    echo "  → copy the Client ID (ends in .apps.googleusercontent.com)"
+    read -p "  Paste it here: " gci
     printf '%s' "$gci" > secrets/google_client_id
     chmod 600 secrets/google_client_id
 fi
 if [ ! -s secrets/google_client_secret ]; then
-    read -sp "Google OAuth client secret: " gcs; echo
+    echo
+    echo "  Paste the matching Client Secret (shown once when you created"
+    echo "  the Client ID above; you can regenerate from the Credentials page)."
+    read -sp "  Client Secret: " gcs; echo
     printf '%s' "$gcs" > secrets/google_client_secret
     chmod 600 secrets/google_client_secret
 fi

@@ -1,0 +1,25 @@
+{
+    # Email used for Let's Encrypt expiry notifications. Replace with
+    # a real admin address or set CADDY_ACME_EMAIL in your .env.
+    email {$CADDY_ACME_EMAIL:admin@yourdistrict.org}
+}
+
+{$DOMAIN:localhost} {
+    # Reverse-proxy everything to the api container. Caddy sets
+    # X-Forwarded-* headers automatically.
+    reverse_proxy api:8000 {
+        header_up Host {host}
+        header_up X-Real-IP {remote}
+    }
+
+    # Keep upload payloads reasonable; mirrors nginx client_max_body_size 10M.
+    request_body {
+        max_size 10MB
+    }
+
+    # Access logs to stdout (docker logs caddy)
+    log {
+        output stdout
+        format console
+    }
+}

@@ -52,10 +52,17 @@ prompt for them.
   development but production wants Linux.
 - **Docker Engine 24+** and **Docker Compose v2** installed.
 - **A domain name** pointing to the host, e.g. `nexus.mydistrict.org`.
-- **A TLS certificate** for that domain — Let's Encrypt via `certbot`
-  works and the compose stack has an nginx snippet for it. Or route
-  through Cloudflare Tunnel and let Cloudflare handle TLS (zero-cert
-  option).
+- **A TLS plan** — three paths, pick one. See the TLS section below
+  for setup details:
+    1. **Caddy auto-TLS** (recommended if you don't already have a cert
+       workflow): swap in the included Caddy compose override. Auto-
+       provisions and auto-renews Let's Encrypt certs. Needs ports 80 +
+       443 open to the Internet.
+    2. **nginx + certbot**: keep the default nginx proxy, run certbot
+       on the host, drop certs into `./nginx/certs/`.
+    3. **Cloudflare Tunnel or existing reverse-proxy / load balancer**:
+       nginx terminates HTTP from the backend; whatever's in front
+       handles TLS.
 - **Outbound Internet access** from the host to
   `googleapis.com`, `google.com`, PyPI, Docker Hub, and your MetaSolutions
   SFTP/Gmail endpoints.
@@ -147,6 +154,138 @@ privileges, then assign it to the admin mailbox Nexus will impersonate
 - Users (read/write)
 - Groups (read/write)
 - Reports (read)
+
+# Google OAuth 2.0 client — for user Sign-In (~5 min)
+
+The **service account** above handles Nexus's backend API calls
+(Directory, Gmail, Sheets). **User login** uses a separate OAuth 2.0
+Client ID so staff can sign in with their district Google account via
+the "Sign in with Google" button on the login page.
+
+Both live in the same Google Cloud project you created above.
+
+## 1. Create the OAuth consent screen
+
+- In your project, go to **APIs & Services → OAuth consent screen**.
+- User Type: **Internal** (restricts to users in your Workspace
+  domain — exactly what you want for staff login).
+- Fill in:
+    - **App name**: Command Nexus (or your district's name for it)
+    - **User support email**: an admin mailbox
+    - **Developer contact**: same
+- Scopes: add `openid`, `email`, `profile`. Those are the only three
+  the login flow needs.
+- Save and continue through the rest; no test users to add for an
+  Internal app.
+
+## 2. Create the OAuth 2.0 Client ID
+
+- **APIs & Services → Credentials → Create Credentials → OAuth client ID**.
+- **Application type**: Web application.
+- **Name**: Nexus Web Login (anything, it's just a label).
+- **Authorized redirect URIs** — add exactly one:
+
+  ```
+  https://nexus.yourdistrict.org/auth/callback
+  ```
+
+  (Match your real DOMAIN from `.env`. The path `/auth/callback`
+  is fixed — Nexus's OAuth router expects it there.)
+- Click Create.
+- Copy the **Client ID** (ends in `.apps.googleusercontent.com`) and
+  **Client secret** (shown once; you can regenerate if you miss it).
+
+## 3. Drop them into secrets
+
+`scripts/first_run.sh` prompts for both and writes them to
+`secrets/google_client_id` and `secrets/google_client_secret`. Or
+place them manually before running the script:
+
+```bash
+echo -n '<your-client-id>.apps.googleusercontent.com' > secrets/google_client_id
+echo -n '<your-client-secret>'                        > secrets/google_client_secret
+chmod 600 secrets/google_client_*
+```
+
+That's it — no DWD, no scopes list, no admin console changes needed
+for the OAuth client. The service account's DWD is a totally separate
+authorization that governs backend API access.
+
+# TLS setup — pick ONE path
+
+Everything after this assumes you have a `DOMAIN` set in `.env` that
+resolves to this host. Pick the TLS strategy that fits your
+environment and skip the other two.
+
+## Path A — Caddy auto-TLS (easiest, recommended)
+
+Caddy auto-provisions and auto-renews Let's Encrypt certificates
+with no cron, no config, no manual intervention. Zero certificate
+maintenance for the life of the deployment.
+
+**Requirements**: ports **80 + 443** open from the public Internet
+to this host, DNS A/AAAA record for your DOMAIN pointing at this
+host.
+
+```bash
+# Confirm CADDY_ACME_EMAIL is set in your .env (expiry alerts from
+# Let's Encrypt go there), then bring the stack up with the Caddy
+# override instead of the default nginx:
+docker compose -f docker-compose.yml -f docker-compose.caddy.yml up -d
+```
+
+Caddy prints the Let's Encrypt handshake in its log the first time:
+```bash
+docker compose -f docker-compose.yml -f docker-compose.caddy.yml logs caddy
+```
+Within ~30 seconds you'll see `certificate obtained successfully` and
+`https://your-domain/` works.
+
+## Path B — nginx + certbot
+
+Keep the default nginx proxy. Run certbot on the host and mount the
+resulting cert directory into the nginx container.
+
+```bash
+# One-time cert issue
+sudo apt install certbot                                    # or dnf install certbot
+sudo certbot certonly --standalone -d nexus.yourdistrict.org \
+    --email admin@yourdistrict.org --agree-tos --non-interactive
+
+# Point nginx at the cert — edit nginx/conf.d/default.conf, replace
+# the "listen 80" block with:
+#   server {
+#       listen 443 ssl http2;
+#       ssl_certificate     /etc/letsencrypt/live/<domain>/fullchain.pem;
+#       ssl_certificate_key /etc/letsencrypt/live/<domain>/privkey.pem;
+#       ... (keep the location / proxy_pass block as-is)
+#   }
+
+# Mount /etc/letsencrypt into the nginx container by adding to the
+# nginx service in docker-compose.yml:
+#   volumes:
+#     - /etc/letsencrypt:/etc/letsencrypt:ro
+
+docker compose up -d
+```
+
+Add a weekly cron for renewal:
+```bash
+echo '0 3 * * 0 root certbot renew --quiet && docker exec nexus-lite-nginx nginx -s reload' \
+  | sudo tee /etc/cron.d/nexus-lite-cert-renew
+```
+
+## Path C — Cloudflare Tunnel or external TLS termination
+
+If you already run Cloudflare Tunnel, F5, HAProxy, or another edge
+appliance that terminates TLS before traffic reaches this host:
+
+- Leave the stock nginx config as-is (HTTP-only on 8080)
+- Point your tunnel/LB at `http://<this-host>:8080`
+- Make sure your edge sets `X-Forwarded-Proto: https` so Nexus knows
+  to generate HTTPS URLs in redirects and emails
+
+No Docker changes needed for this path.
 
 # Installing on the host (~15 min)
 
