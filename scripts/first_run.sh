@@ -7,6 +7,44 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# ── Docker socket preflight ────────────────────────────────────────
+# install_prereqs.sh adds the user to the docker group, but Linux
+# doesn't refresh group membership on an already-running shell. If
+# this script was run before 'newgrp docker' / re-login, docker calls
+# will fail with "permission denied on /var/run/docker.sock".
+#
+# Fix transparently: if the user IS in the docker group but the
+# current shell didn't pick it up, re-exec self via sg(1) which
+# activates the group for just this subprocess. User never sees the
+# error.
+if ! docker info >/dev/null 2>&1; then
+    if id -nG "${USER:-$(whoami)}" 2>/dev/null | tr ' ' '\n' | grep -qx docker; then
+        if [ "${_FIRST_RUN_REEXECED:-0}" = "1" ]; then
+            echo "ERROR: docker socket still denied even after sg docker — is dockerd running?" >&2
+            echo "       Try: sudo systemctl start docker" >&2
+            exit 1
+        fi
+        echo "docker group not active in this shell — re-executing via 'sg docker'…"
+        export _FIRST_RUN_REEXECED=1
+        exec sg docker -c "$0 $*"
+    fi
+    # Not in group at all: tell them to run install_prereqs
+    cat >&2 <<EOF
+ERROR: can't talk to the docker daemon at /var/run/docker.sock.
+
+Likely causes:
+  • You haven't run the prereq installer yet. Run:
+        sudo ./scripts/install_prereqs.sh
+  • Docker daemon isn't running:
+        sudo systemctl start docker
+  • You're not in the docker group:
+        groups | grep docker  (should list it)
+
+Fix the underlying issue, then re-run this script.
+EOF
+    exit 1
+fi
+
 echo "== Command Nexus first-run =="
 echo
 
