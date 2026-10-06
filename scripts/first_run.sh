@@ -164,18 +164,102 @@ if is_true "$LOCAL_AUTH_ENABLED"; then
 fi
 
 echo
-echo "== First-run complete =="
+echo "== Secrets + bootstrap written =="
 echo
-echo "Next steps:"
-echo "  1. docker compose up -d"
-echo "  2. Open https://\$DOMAIN/ and sign in:"
+
+# ── Bring the stack up ─────────────────────────────────────────────
+# Default-yes prompt. Say N if you plan to layer a TLS overlay
+# (docker-compose.caddy.yml, docker-compose.local.yml, etc.) — in
+# that case you'll run the overlay-aware 'docker compose -f ... up'
+# yourself after this script exits.
+echo "Ready to bring the stack up with the base compose (HTTP on :8080)."
+echo "Pick N if you plan to use a TLS overlay (Caddy/DNS-01/local) —"
+echo "you can bring it up later with the overlay compose command."
+read -p "Build + start containers now? [Y/n] " do_up
+case "$(printf '%s' "$do_up" | tr '[:upper:]' '[:lower:]')" in
+    n|no)
+        echo
+        echo "== First-run complete (containers NOT started) =="
+        echo
+        echo "When ready, bring the stack up with:"
+        echo "    docker compose up -d --build"
+        echo "    docker compose exec api alembic upgrade head"
+        echo
+        exit 0
+        ;;
+esac
+
+echo
+echo "-- building images + starting stack --"
+# Pipe build output through so operators see progress on a cold build
+# (image compilation can take several minutes on first run).
+docker compose up -d --build
+
+echo
+echo "-- waiting for postgres to be ready --"
+# Compose's depends_on condition handles the API wait, but we need
+# postgres explicitly before running migrations.
+for i in $(seq 1 60); do
+    if docker compose exec -T postgres pg_isready -U "${POSTGRES_USER:-nexus_admin}" >/dev/null 2>&1; then
+        echo "    postgres ready"
+        break
+    fi
+    sleep 1
+    if [ "$i" = "60" ]; then
+        echo "ERROR: postgres didn't become ready within 60s — check 'docker compose logs postgres'" >&2
+        exit 1
+    fi
+done
+
+echo
+echo "-- running database migrations --"
+docker compose exec -T api alembic upgrade head
+
+echo
+echo "-- waiting for API to be healthy --"
+for i in $(seq 1 60); do
+    status="$(docker inspect --format='{{.State.Health.Status}}' nexus-lite-api 2>/dev/null || echo starting)"
+    if [ "$status" = "healthy" ]; then
+        echo "    api healthy"
+        break
+    fi
+    sleep 2
+    if [ "$i" = "60" ]; then
+        echo "WARN: API didn't go healthy within 2 min — check 'docker compose logs api'" >&2
+        echo "      (continuing anyway — it may still come up)" >&2
+        break
+    fi
+done
+
+# ── Login details ──────────────────────────────────────────────────
+# Prefer the DOMAIN from .env if set to a real value, otherwise fall
+# back to the LAN IP for the http://<ip>:8080 landing.
+host_hint="$DOMAIN"
+if [ -z "$host_hint" ] || [ "$host_hint" = "nexus.yourdistrict.org" ]; then
+    host_hint="$(hostname -I 2>/dev/null | awk '{print $1}')"
+    [ -z "$host_hint" ] && host_hint="<this-vm-ip>"
+    url="http://${host_hint}:8080/"
+else
+    url="https://${host_hint}/"
+fi
+
+echo
+echo "================================================================"
+echo "  Command Nexus (lite) is up."
+echo "================================================================"
+echo
+echo "  Open:  $url"
+echo
 if is_true "$LOCAL_AUTH_ENABLED" && [ ! -s secrets/bootstrap_local_admin ]; then
-    echo "     • Default local admin: admin@local / changeme123!"
-    echo "       (You'll be forced to pick a new password immediately.)"
+    echo "  Sign in as:  admin@local / changeme123!"
+    echo "  (You'll be forced to pick a new password on first sign-in.)"
 elif is_true "$LOCAL_AUTH_ENABLED"; then
-    echo "     • Local admin: (the email + password you just entered)"
+    echo "  Sign in as:  (the local admin email + password you entered)"
 fi
 if is_true "$GOOGLE_AUTH_ENABLED" && [ -n "$admin_email" ]; then
-    echo "     • Google SSO as: $admin_email"
+    echo "  Or Google SSO as: $admin_email"
 fi
+echo
+echo "  Tail logs:   docker compose logs -f api"
+echo "  Stop stack:  docker compose down"
 echo

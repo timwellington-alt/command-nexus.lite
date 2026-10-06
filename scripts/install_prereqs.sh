@@ -148,14 +148,11 @@ Next steps (as ${INVOKING_USER:-your deploy user}):
        cp /path/to/your/google-service-account.json \\
           secrets/google_service_account.json
 
-  4. Run the first-run setup (generates secrets, prompts for admin):
+  4. Run first-run — generates secrets, builds images, starts the
+     stack, runs migrations, and prints the login URL + credentials:
        ./scripts/first_run.sh
 
-  5. Bring the stack up:
-       docker compose up -d
-       docker compose logs -f api
-
-  6. Follow docs/DISTRICT_SETUP.pdf for Google Workspace service
+  5. Follow docs/DISTRICT_SETUP.pdf for Google Workspace service
      account setup + Settings-page configuration.
 
 EOF
