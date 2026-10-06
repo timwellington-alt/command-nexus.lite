@@ -80,6 +80,12 @@ echo
 
 mkdir -p secrets
 
+# Pre-create bind-mount source directories. Git doesn't track empty
+# dirs so these are missing on a fresh clone; Docker tolerates missing
+# bind sources on most hosts but fails on some rootless / overlayfs
+# setups with "invalid mount config for type bind".
+mkdir -p data/photos data/exports
+
 # Generate any missing secret files. Existing files are left alone so
 # a re-run doesn't rotate credentials Postgres already initialized on.
 gen_secret() {
