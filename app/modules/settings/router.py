@@ -744,14 +744,6 @@ SETTING_GROUPS = {
             ("model", "Model name — leave blank for gemini-2.5-flash (free tier + vision). Alternatives: gemini-2.5-flash-lite (cheaper, text-only), gemini-flash-latest (always-current alias, may change tier)", False),
         ],
     },
-    "anthropic": {
-        "label": "Anthropic (Claude)",
-        "category": "External APIs",
-        "fields": [
-            ("api_key", "Anthropic API Key (from console.anthropic.com) — used by the chat module", True),
-            ("model", "Model name — leave blank for claude-sonnet-4-6. Alternatives: claude-opus-4-7 (slower, harder reasoning), claude-haiku-4-5 (cheaper, faster)", False),
-        ],
-    },
 }
 
 

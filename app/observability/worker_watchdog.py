@@ -1,10 +1,11 @@
 """API-side worker watchdog.
 
 The in-worker check_job_liveness monitor can't detect the case where
-the entire worker container is dead (2026-09-17 outage: pychromecast
-FD leak → worker unhealthy → no jobs ran for 4 days → nobody knew).
-This module runs INSIDE the API container, which almost never goes
-down, and pages when it sees no job activity at all.
+the entire worker container is dead (e.g. FD exhaustion / OOM — one
+such outage left the worker unhealthy for 4 days with no jobs run
+and nobody noticed). This module runs INSIDE the API container,
+which almost never goes down, and pages when it sees no job activity
+at all.
 
 Signal: `MAX(started_at) FROM job_runs`. If that timestamp is older
 than `STALE_THRESHOLD_SEC` (default 30 min), the worker is dead.
