@@ -123,7 +123,8 @@ async def local_login(
         return RedirectResponse(url="/?err=local_locked", status_code=303)
 
     row = (await db.execute(text("""
-        SELECT id, email, display_name, pw_hash, is_admin, active
+        SELECT id, email, display_name, pw_hash, is_admin, active,
+               must_change_password
         FROM local_users
         WHERE lower(email) = :e
         LIMIT 1
@@ -174,6 +175,7 @@ async def local_login(
                 "user_email": row["email"],
                 "user_display_name": row["display_name"] or row["email"],
                 "auth_method": "local",
+                "must_change_password": bool(row["must_change_password"]),
             },
             secret_key=settings.app_secret_key,
             max_age=int(SESSION_TTL.total_seconds()),
@@ -181,7 +183,12 @@ async def local_login(
     finally:
         await r.aclose()
 
-    resp = RedirectResponse(url="/dashboard", status_code=303)
+    # If this account must change its password (default-admin bootstrap
+    # or admin-triggered reset), land on the change page instead of
+    # dashboard. Middleware allows that specific path for authenticated
+    # users with the flag set.
+    dest = "/auth/local/change-password" if row["must_change_password"] else "/dashboard"
+    resp = RedirectResponse(url=dest, status_code=303)
     resp.set_cookie(
         "session", new_cookie,
         max_age=int(SESSION_TTL.total_seconds()),
@@ -189,6 +196,67 @@ async def local_login(
         secure=settings.is_production, path="/",
     )
     return resp
+
+
+@router.get("/change-password", response_class=HTMLResponse)
+async def local_change_password_form(request: Request):
+    """Form shown when must_change_password=true. Any authenticated
+    local-auth user can use this to change their own password; it's
+    FORCED on first login after bootstrap or an admin reset."""
+    if not request.session.get("user_email"):
+        return RedirectResponse(url="/", status_code=303)
+    return templates.TemplateResponse("local_change_password.html", {
+        "request": request,
+        "err": request.query_params.get("err"),
+    })
+
+
+@router.post("/change-password")
+async def local_change_password(
+    request: Request,
+    current_password: str = Form(...),
+    new_password: str = Form(...),
+    new_password_confirm: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+):
+    email = request.session.get("user_email")
+    if not email:
+        return RedirectResponse(url="/", status_code=303)
+    if new_password != new_password_confirm:
+        return RedirectResponse(url="/auth/local/change-password?err=mismatch", status_code=303)
+    if len(new_password) < 12:
+        return RedirectResponse(url="/auth/local/change-password?err=too_short", status_code=303)
+    if new_password == current_password:
+        return RedirectResponse(url="/auth/local/change-password?err=same", status_code=303)
+
+    row = (await db.execute(text(
+        "SELECT id, pw_hash FROM local_users WHERE lower(email) = :e"
+    ).bindparams(e=email.lower()))).mappings().first()
+    if not row:
+        # Not a local user — they got here via Google SSO. Punt to dashboard.
+        return RedirectResponse(url="/dashboard", status_code=303)
+    try:
+        _hasher().verify(row["pw_hash"], current_password)
+    except Exception:
+        return RedirectResponse(url="/auth/local/change-password?err=bad_current", status_code=303)
+
+    await db.execute(text("""
+        UPDATE local_users
+        SET pw_hash = :p, must_change_password = false
+        WHERE id = :id
+    """).bindparams(p=_hasher().hash(new_password), id=row["id"]))
+    await log_action(
+        db, actor=email, action="auth.local.password_changed",
+        module="auth", target=email,
+        ip_address=request.client.host if request.client else None,
+    )
+    await db.commit()
+    # Clear the session flag so middleware stops redirecting back here
+    try:
+        request.session.pop("must_change_password", None)
+    except Exception:
+        pass
+    return RedirectResponse(url="/dashboard", status_code=303)
 
 
 # ─── Admin management (requires logged-in admin) ──────────────────
@@ -208,7 +276,7 @@ async def list_local_users(
 ):
     rows = (await db.execute(text("""
         SELECT id, email, display_name, is_admin, active, created_at,
-               created_by, last_login
+               created_by, last_login, must_change_password
         FROM local_users
         ORDER BY email
     """))).mappings().all()
@@ -273,6 +341,10 @@ async def update_local_user(
             raise HTTPException(status_code=400, detail="password must be ≥ 12 chars")
         sets.append("pw_hash = :pw")
         params["pw"] = _hasher().hash(pw)
+        # Admin-triggered password reset → user must change on next login
+        # unless the admin explicitly says they're setting a known value.
+        if not body.get("skip_force_change"):
+            sets.append("must_change_password = true")
     if not sets:
         raise HTTPException(status_code=400, detail="no fields to update")
     await db.execute(text(

@@ -32,6 +32,7 @@ def upgrade() -> None:
                   server_default=sa.text("NOW()")),
         sa.Column("created_by", sa.String(255)),
         sa.Column("last_login", sa.DateTime(timezone=True)),
+        sa.Column("must_change_password", sa.Boolean, nullable=False, server_default="false"),
     )
     op.create_index("ix_local_users_email_ci", "local_users",
                     [sa.text("lower(email)")], unique=True)

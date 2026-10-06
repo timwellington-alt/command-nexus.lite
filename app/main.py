@@ -51,32 +51,54 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("Branding preload failed, using defaults: %s", e)
 
-    # Local-auth bootstrap — if secrets/bootstrap_local_admin exists AND
-    # the feature flag is on, create (or update) that admin account on
-    # startup then remove the file so the password doesn't linger on disk.
+    # Local-auth bootstrap — two paths:
+    #   1. If secrets/bootstrap_local_admin exists (first_run.sh wrote it),
+    #      apply it + remove the file.
+    #   2. Else if the feature flag is on but local_users is empty, create
+    #      a default admin (admin@local / changeme123!) with
+    #      must_change_password=true so the first login forces a reset.
     try:
         if get_settings().local_auth_enabled:
             import os as _os
+            from app.db.engine import AsyncSessionLocal
+            from sqlalchemy import text as _text
             boot_path = _os.environ.get("SECRETS_DIR", "/run/secrets") + "/bootstrap_local_admin"
-            if _os.path.isfile(boot_path):
-                with open(boot_path) as _f:
-                    _lines = _f.read().strip().splitlines()
-                if len(_lines) == 2:
-                    _email, _pw = _lines[0].strip().lower(), _lines[1]
-                    from app.db.engine import AsyncSessionLocal
-                    from app.auth.local import _hasher
-                    from sqlalchemy import text as _text
-                    async with AsyncSessionLocal() as _db:
+            applied = False
+            async with AsyncSessionLocal() as _db:
+                if _os.path.isfile(boot_path):
+                    with open(boot_path) as _f:
+                        _lines = _f.read().strip().splitlines()
+                    if len(_lines) == 2:
+                        _email, _pw = _lines[0].strip().lower(), _lines[1]
+                        from app.auth.local import _hasher
                         await _db.execute(_text("""
-                            INSERT INTO local_users (email, display_name, pw_hash, is_admin, created_by)
-                            VALUES (:e, :e, :p, true, 'system:bootstrap')
+                            INSERT INTO local_users (email, display_name, pw_hash, is_admin, created_by, must_change_password)
+                            VALUES (:e, :e, :p, true, 'system:bootstrap', false)
                             ON CONFLICT (email) DO UPDATE SET
-                                pw_hash = EXCLUDED.pw_hash, is_admin = true, active = true
+                                pw_hash = EXCLUDED.pw_hash, is_admin = true, active = true,
+                                must_change_password = false
                         """).bindparams(e=_email, p=_hasher().hash(_pw)))
                         await _db.commit()
-                    logger.info("Local-auth bootstrap: admin %s seeded", _email)
-                    try: _os.remove(boot_path)
-                    except OSError: pass
+                        logger.info("Local-auth bootstrap: admin %s seeded from secrets file", _email)
+                        applied = True
+                        try: _os.remove(boot_path)
+                        except OSError: pass
+                if not applied:
+                    # Create default admin if the table is empty
+                    row = (await _db.execute(_text(
+                        "SELECT COUNT(*) FROM local_users"
+                    ))).scalar_one()
+                    if row == 0:
+                        from app.auth.local import _hasher
+                        await _db.execute(_text("""
+                            INSERT INTO local_users (email, display_name, pw_hash, is_admin, created_by, must_change_password)
+                            VALUES ('admin@local', 'Default Admin', :p, true, 'system:default', true)
+                        """).bindparams(p=_hasher().hash('changeme123!')))
+                        await _db.commit()
+                        logger.warning(
+                            "Local-auth: default admin created — email=admin@local "
+                            "password=changeme123! — MUST change on first login"
+                        )
     except Exception as e:
         logger.warning("Local-auth bootstrap failed (non-fatal): %s", e)
 

@@ -699,6 +699,47 @@
         <span id="smb-tab-msg" style="font-size:12px;margin-left:8px"></span>
       </div>
     </div>
+
+    {% if local_auth_enabled %}
+    <!-- Local accounts panel (only mounted when LOCAL_AUTH_ENABLED=true) -->
+    <div class="module-panel" id="panel-local_accounts">
+      <div class="panel-header">
+        <span class="panel-title">Local Accounts</span>
+      </div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:16px">
+        Secondary login path alongside Google SSO. Users here sign in on the login page via the "Local account" tab.
+        Passwords are hashed with argon2id. 5 failed attempts within 15 minutes locks the account for 15 minutes.
+      </p>
+
+      <div id="la-list" style="margin-bottom:20px"></div>
+
+      <div style="padding:16px;background:var(--surface);border:1px solid var(--border);border-radius:6px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:10px">Add Local Account</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+          <div>
+            <label style="font-size:11px;color:var(--muted)">Email</label>
+            <input id="la-email" placeholder="admin@yourdistrict.org" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:4px;font-size:12px">
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--muted)">Display name (optional)</label>
+            <input id="la-display" placeholder="Jane Admin" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:4px;font-size:12px">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:end">
+          <div>
+            <label style="font-size:11px;color:var(--muted)">Password (min 12 chars)</label>
+            <input id="la-password" type="password" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:4px;font-size:12px;font-family:ui-monospace,monospace">
+          </div>
+          <label style="font-size:12px;display:flex;align-items:center;gap:4px;padding:6px 0">
+            <input id="la-is-admin" type="checkbox"> Admin
+          </label>
+          <button class="btn btn-primary btn-sm" id="la-add-btn">Add</button>
+        </div>
+        <span id="la-msg" style="font-size:12px;margin-top:8px;display:inline-block"></span>
+      </div>
+    </div>
+    {% endif %}
+
   </div>
 </div>
 {% endblock %}
@@ -726,6 +767,9 @@ function showPanel(key) {
   // (data-action="show-panel" dispatcher routes here)
   if (key === 'voice') {
     ttsUpdatePreviewBtn();
+  }
+  if (key === 'local_accounts') {
+    laLoad();
   }
   // Alerts panel: load recipients, buildings, VAPID key, cast targets
   if (key === 'alerts') {
@@ -774,6 +818,9 @@ function renderSidebar(groups) {
     'Chromebook': [{key: 'direct_print', label: 'Direct-Print Printers', linkTo: '/settings/direct-print'}],
     'Security': [{key: 'halo_recipients', label: 'HALO Alert Recipients'}],
     'Alerts': [{key: 'alerts', label: 'Alert Routing'}],
+    {% if local_auth_enabled %}
+    'Access': [{key: 'local_accounts', label: 'Local Accounts'}],
+    {% endif %}
   };
   // A category is worth rendering if it has API groups OR extras entries
   // (previously extras-only sections like Roster + Alerts silently
@@ -849,7 +896,7 @@ function renderPanels(groups, settings) {
   const container = document.getElementById('panels-container');
   // Build a panel for each integration group
   // Keys that have static HTML panels — skip dynamic rendering
-  const STATIC_PANELS = new Set(['role_sync', 'profiles', 'hr_smb_tabs', 'building_map', 'student_ou_map', 'bell_schedules', 'homeroom_periods', 'noc_sensors', 'infra_tools', 'alerts', 'halo_recipients', 'student_membership']);
+  const STATIC_PANELS = new Set(['role_sync', 'profiles', 'hr_smb_tabs', 'building_map', 'student_ou_map', 'bell_schedules', 'homeroom_periods', 'noc_sensors', 'infra_tools', 'alerts', 'halo_recipients', 'student_membership', 'local_accounts']);
   let html = '';
   for (const [key, g] of Object.entries(groups)) {
     if (STATIC_PANELS.has(key)) continue;
@@ -3941,6 +3988,123 @@ loadHRP();
 loadProfiles();
 loadIntegrationMetadata();
 loadTabConfigs();
+
+// ── Local Accounts panel (only visible when LOCAL_AUTH_ENABLED) ──
+async function laLoad() {
+  const listEl = document.getElementById('la-list');
+  if (!listEl) return;
+  listEl.innerHTML = '<p style="color:var(--muted);font-size:12px">Loading…</p>';
+  try {
+    const r = await fetch('/api/local-users', {headers: {'X-Requested-With':'CommandNexus'}});
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    const users = data.users || [];
+    if (!users.length) {
+      listEl.innerHTML = '<p style="color:var(--muted);font-size:12px">No local accounts yet.</p>';
+      return;
+    }
+    listEl.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="text-align:left;border-bottom:1px solid var(--border)">
+        <th style="padding:6px 8px">Email</th>
+        <th style="padding:6px 8px">Name</th>
+        <th style="padding:6px 8px">Admin</th>
+        <th style="padding:6px 8px">Active</th>
+        <th style="padding:6px 8px">Last login</th>
+        <th style="padding:6px 8px">Actions</th>
+      </tr></thead>
+      <tbody>${users.map(u => laRow(u)).join('')}</tbody>
+    </table>`;
+    listEl.querySelectorAll('[data-la-action]').forEach(el => {
+      el.addEventListener('click', () => laAction(el.dataset.laAction, Number(el.dataset.laId), el.dataset.laEmail));
+    });
+  } catch (e) {
+    listEl.innerHTML = `<p style="color:var(--red);font-size:12px">Error loading: ${e.message}</p>`;
+  }
+}
+
+function laRow(u) {
+  const last = u.last_login ? new Date(u.last_login).toLocaleDateString() : '—';
+  const chg = u.must_change_password ? ' <span style="color:var(--yellow);font-size:10px">(must change pw)</span>' : '';
+  return `<tr style="border-bottom:1px solid var(--border)">
+    <td style="padding:6px 8px;font-family:ui-monospace,monospace">${(u.email||'').replace(/</g,'&lt;')}${chg}</td>
+    <td style="padding:6px 8px">${(u.display_name||'').replace(/</g,'&lt;')}</td>
+    <td style="padding:6px 8px">${u.is_admin ? '✓' : ''}</td>
+    <td style="padding:6px 8px">${u.active ? '✓' : '<span style="color:var(--muted)">no</span>'}</td>
+    <td style="padding:6px 8px;color:var(--muted)">${last}</td>
+    <td style="padding:6px 8px;white-space:nowrap">
+      <button data-la-action="reset" data-la-id="${u.id}" data-la-email="${(u.email||'').replace(/"/g,'&quot;')}"
+              style="background:none;border:1px solid var(--border);color:var(--text);padding:2px 8px;border-radius:3px;font-size:11px;cursor:pointer;margin-right:4px">Reset pw</button>
+      <button data-la-action="toggle-active" data-la-id="${u.id}" data-la-email="${(u.email||'').replace(/"/g,'&quot;')}"
+              style="background:none;border:1px solid var(--border);color:var(--text);padding:2px 8px;border-radius:3px;font-size:11px;cursor:pointer;margin-right:4px">${u.active ? 'Disable' : 'Enable'}</button>
+      <button data-la-action="toggle-admin" data-la-id="${u.id}" data-la-email="${(u.email||'').replace(/"/g,'&quot;')}"
+              style="background:none;border:1px solid var(--border);color:var(--text);padding:2px 8px;border-radius:3px;font-size:11px;cursor:pointer;margin-right:4px">${u.is_admin ? 'Revoke admin' : 'Make admin'}</button>
+      <button data-la-action="delete" data-la-id="${u.id}" data-la-email="${(u.email||'').replace(/"/g,'&quot;')}"
+              style="background:none;border:1px solid var(--danger);color:var(--danger);padding:2px 8px;border-radius:3px;font-size:11px;cursor:pointer">Delete</button>
+    </td>
+  </tr>`;
+}
+
+async function laAction(action, id, email) {
+  const headers = {'X-Requested-With':'CommandNexus', 'Content-Type':'application/json'};
+  try {
+    if (action === 'delete') {
+      if (!confirm(`Delete local account ${email}?`)) return;
+      const r = await fetch('/api/local-users/' + id, {method:'DELETE', headers});
+      if (!r.ok) throw new Error((await r.json()).detail || 'HTTP ' + r.status);
+    } else if (action === 'reset') {
+      const pw = prompt(`New password for ${email} (min 12 chars). The user will be forced to change it on next login.`);
+      if (!pw) return;
+      if (pw.length < 12) { alert('Password must be at least 12 characters.'); return; }
+      const r = await fetch('/api/local-users/' + id, {method:'PATCH', headers, body: JSON.stringify({password: pw})});
+      if (!r.ok) throw new Error((await r.json()).detail || 'HTTP ' + r.status);
+      alert('Password reset. User must change it on next login.');
+    } else if (action === 'toggle-active') {
+      // Get current state from the row's text — simpler than refetching
+      const row = document.querySelector(`[data-la-id="${id}"][data-la-action="toggle-active"]`);
+      const currentlyActive = row.textContent.trim() === 'Disable';
+      const r = await fetch('/api/local-users/' + id, {method:'PATCH', headers, body: JSON.stringify({active: !currentlyActive})});
+      if (!r.ok) throw new Error((await r.json()).detail || 'HTTP ' + r.status);
+    } else if (action === 'toggle-admin') {
+      const row = document.querySelector(`[data-la-id="${id}"][data-la-action="toggle-admin"]`);
+      const currentlyAdmin = row.textContent.trim() === 'Revoke admin';
+      const r = await fetch('/api/local-users/' + id, {method:'PATCH', headers, body: JSON.stringify({is_admin: !currentlyAdmin})});
+      if (!r.ok) throw new Error((await r.json()).detail || 'HTTP ' + r.status);
+    }
+    laLoad();
+  } catch (e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+const laAddBtn = document.getElementById('la-add-btn');
+if (laAddBtn) {
+  laAddBtn.addEventListener('click', async () => {
+    const email = document.getElementById('la-email').value.trim();
+    const display = document.getElementById('la-display').value.trim();
+    const password = document.getElementById('la-password').value;
+    const is_admin = document.getElementById('la-is-admin').checked;
+    const msg = document.getElementById('la-msg');
+    msg.textContent = '';
+    if (!email || !password) { msg.textContent = 'Email + password required'; msg.style.color = 'var(--red)'; return; }
+    if (password.length < 12) { msg.textContent = 'Password must be at least 12 chars'; msg.style.color = 'var(--red)'; return; }
+    try {
+      const r = await fetch('/api/local-users', {
+        method: 'POST',
+        headers: {'X-Requested-With':'CommandNexus', 'Content-Type':'application/json'},
+        body: JSON.stringify({email, display_name: display, password, is_admin}),
+      });
+      if (!r.ok) throw new Error((await r.json()).detail || 'HTTP ' + r.status);
+      msg.textContent = '✓ Added'; msg.style.color = 'var(--green)';
+      document.getElementById('la-email').value = '';
+      document.getElementById('la-display').value = '';
+      document.getElementById('la-password').value = '';
+      document.getElementById('la-is-admin').checked = false;
+      laLoad();
+    } catch (e) {
+      msg.textContent = 'Error: ' + e.message; msg.style.color = 'var(--red)';
+    }
+  });
+}
 smLoad();
 
 // ── Insert tag at cursor position ───────────────────────────────────────

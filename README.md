@@ -105,10 +105,18 @@ Enable in `.env`:
 LOCAL_AUTH_ENABLED=true
 ```
 
-Then re-run `scripts/first_run.sh` — it'll prompt for an initial
-local admin email + password (min 12 chars) and seed them. Subsequent
-accounts are created from the Settings → Local accounts admin UI (or
-POST to `/api/local-users`).
+Then:
+- Either re-run `scripts/first_run.sh` to prompt for an initial local
+  admin (recommended), OR
+- Let the API create a **default admin** on first boot:
+    - email: `admin@local`
+    - password: `changeme123!`
+    - `must_change_password=true` — first login forces a password reset
+      before anything else works
+
+Subsequent accounts are managed in **Settings → Access → Local
+Accounts** (list, add, reset password, enable/disable, grant/revoke
+admin, delete) or via `/api/local-users`.
 
 Technical details:
 - Passwords hashed with argon2id (OWASP-recommended defaults)

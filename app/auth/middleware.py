@@ -119,6 +119,23 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 return JSONResponse({"detail": "Not authenticated"}, status_code=401)
             return RedirectResponse(url="/")
 
+        # ── Force password change for local-auth accounts marked
+        #    must_change_password (default admin bootstrap or admin reset).
+        #    Allow the change-password form itself + logout, redirect
+        #    everything else to the form.
+        try:
+            if request.session.get("must_change_password"):
+                allowed = {"/auth/local/change-password", "/auth/local/logout"}
+                if path not in allowed and not path.startswith("/static/"):
+                    if path.startswith("/api/"):
+                        return JSONResponse(
+                            {"detail": "Password change required"},
+                            status_code=403,
+                        )
+                    return RedirectResponse(url="/auth/local/change-password")
+        except Exception:
+            pass
+
         # ── 2FA enforcement — re-checked periodically for active sessions ──
         if not await self._check_session_2fa(request):
             request.session.clear()

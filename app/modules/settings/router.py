@@ -761,12 +761,14 @@ async def settings_page(
     user: User = Depends(require_action("settings.manage")),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.config import get_settings as _gs
     permissions = await get_user_permissions(db, user.id)
     modules = build_page_modules(permissions)
     return templates.TemplateResponse("settings.html", {
         "request": request,
         "user": user,
         "modules": modules,
+        "local_auth_enabled": _gs().local_auth_enabled,
     })
 
 
