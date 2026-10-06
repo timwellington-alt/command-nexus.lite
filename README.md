@@ -33,8 +33,10 @@ logs. A 4 GB / 40 GB / 2-core VM runs this comfortably.
 ## Prerequisites
 
 - Linux host with Docker Engine 24+ and Docker Compose v2
-- Domain name pointing to the host + TLS cert (Let's Encrypt or Cloudflare Tunnel)
-- Google Workspace super-admin access (for service-account + DWD setup)
+- Domain name pointing to the host (TLS setup covered below)
+- Google Workspace super-admin access — needed for TWO separate things:
+  the service account + DWD (backend API) AND the OAuth 2.0 Client ID
+  (user Sign-In). Walkthroughs for both in `docs/DISTRICT_SETUP.pdf`
 - A SIS that emails daily CSV exports — the reference implementation
   consumes PowerSchool exports; other SIS platforms need per-column
   mapping configured in Settings
@@ -42,8 +44,9 @@ logs. A 4 GB / 40 GB / 2-core VM runs this comfortably.
 ## Setup
 
 See [docs/DISTRICT_SETUP.pdf](docs/DISTRICT_SETUP.pdf) (or
-[docs/DISTRICT_SETUP.md](docs/DISTRICT_SETUP.md)) for the full walkthrough.
-TL;DR:
+[docs/DISTRICT_SETUP.md](docs/DISTRICT_SETUP.md)) for the full walkthrough
+including the Google Cloud project setup, OAuth 2.0 Client creation,
+and TLS options. TL;DR:
 
 ```bash
 git clone https://github.com/timwellington-alt/command-nexus.lite.git command-nexus-lite
@@ -52,11 +55,46 @@ sudo ./scripts/install_prereqs.sh        # Docker + Compose + deps
 cp .env.example .env
 $EDITOR .env
 cp <path-to-your-service-account>.json secrets/google_service_account.json
-./scripts/first_run.sh
-docker compose up -d
+./scripts/first_run.sh                    # prompts for OAuth client ID + secret
+docker compose up -d                      # or use a TLS override, see below
 ```
 
 Then log in at `https://<your-domain>/` with the admin email you seeded.
+
+## TLS — pick one path
+
+1. **Caddy auto-TLS** (recommended; zero cert maintenance):
+   ```bash
+   docker compose -f docker-compose.yml -f docker-compose.caddy.yml up -d
+   ```
+   Needs ports 80 + 443 reachable from the Internet. Caddy
+   auto-provisions and auto-renews Let's Encrypt certs.
+
+2. **nginx + certbot**: keep the default nginx proxy, run certbot on
+   the host, point nginx at `/etc/letsencrypt/live/...`. Full commands
+   in the PDF.
+
+3. **Cloudflare Tunnel or your existing load balancer**: leave
+   nginx HTTP-only on 8080, point your edge at it. Make sure the
+   edge sends `X-Forwarded-Proto: https`.
+
+## Google OAuth 2.0 Client — for user Sign-In
+
+Separate from the service account (which handles backend API work).
+Short version:
+
+1. Google Cloud Console → **APIs & Services → OAuth consent screen**
+   → User type **Internal** → scopes `openid`, `email`, `profile`.
+2. **APIs & Services → Credentials → Create Credentials → OAuth
+   client ID → Web application**.
+3. **Authorized redirect URI**: `https://<your-domain>/auth/callback`
+   (exact path — Nexus's OAuth router expects it there).
+4. Copy the Client ID + Client Secret into
+   `secrets/google_client_id` and `secrets/google_client_secret`
+   (or let `first_run.sh` prompt for them).
+
+Full walkthrough with screenshots and admin-console paths in
+[docs/DISTRICT_SETUP.pdf](docs/DISTRICT_SETUP.pdf).
 
 ## Known issues (first-run)
 
