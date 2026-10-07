@@ -983,20 +983,13 @@ async def staff_directory(
             "ignored": s.ignored,
             "match_state": s.match_state,
         }
-        # Photo — local upload takes priority over Paxton.
-        # Read-time fallback: if the _active.jpg marker is missing but the
-        # user has timestamped uploads on disk, use the newest one. Guards
-        # against rows that lost their active marker (mid-development glitch
-        # left a few staff with photos but no active link).
-        # Cache-buster (?v=mtime) so the browser refetches when the file changes.
+        # Photo — resolved from the staff_photos legacy marker (dual-
+        # written by photo_service on upload/set-active) so this hot
+        # loop stays sync. Cache-buster (?v=mtime) so the browser
+        # refetches when the file changes.
         local_photo = _resolve_active_photo(s.username)
         if local_photo:
             entry["photo"] = f"/api/staff/media/{local_photo}{_photo_cache_buster(local_photo)}"
-        elif s.paxton_id:
-            # Trust the file — the has_paxton_photo flag goes stale.
-            pname = f"paxton_{s.paxton_id}.jpg"
-            if os.path.isfile(os.path.join(MEDIA_DIR, pname)):
-                entry["photo"] = f"/api/staff/media/{pname}{_photo_cache_buster(pname)}"
         # Room
         if s.room:
             entry["room"] = s.room
@@ -1660,87 +1653,69 @@ async def upload_profile_photo(
     user: User = Depends(require_action("staff.provision.execute")),
     db: AsyncSession = Depends(get_db),
 ):
-    """Upload a staff photo. Syncs to Paxton (if matched) and Google (if account exists)."""
-    from app.modules.staff.models import StaffReconciliation
-    from sqlalchemy import func
+    """Upload a staff photo. Nexus is the system of record — the file
+    goes to disk + a staff_photos row carries the metadata. A future
+    Paxton push-sync worker (if a district adds Paxton) can read from
+    staff_photos; the upload path itself has no Paxton coupling.
+
+    Still syncs to Google Workspace if that integration is configured
+    and the staff row has an email — Google is where the photo surfaces
+    in Gmail/Meet/Calendar, so it's worth the opportunistic push."""
+    from app.modules.staff import photo_service
 
     # Validate file
     ext = os.path.splitext(photo.filename or "")[1].lower()
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=400, detail=f"File type not allowed: {ext}")
     content = await photo.read()
-    if len(content) > MAX_UPLOAD_SIZE:
-        raise HTTPException(status_code=400, detail="File too large (max 5MB)")
-    if not _is_valid_image(content):
-        raise HTTPException(status_code=400, detail="Invalid image content")
 
-    # Save with timestamp — never overwrite old photos
-    from datetime import datetime, timezone
-    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    os.makedirs(MEDIA_DIR, exist_ok=True)
-    filename = f"profile_{username}_{ts}.jpg"
-    filepath = os.path.join(MEDIA_DIR, filename)
-
-    # Convert to JPEG and resize
-    from PIL import Image as PILImage
-    from io import BytesIO
     try:
-        img = PILImage.open(BytesIO(content))
-        img = img.convert("RGB")
-        img.thumbnail((400, 400), PILImage.LANCZOS)
-        jpeg_buf = BytesIO()
-        img.save(jpeg_buf, format="JPEG", quality=90)
-        jpeg_bytes = jpeg_buf.getvalue()
+        result = await photo_service.upload_photo(
+            db,
+            username=username,
+            raw_bytes=content,
+            uploaded_by=user.email or "unknown",
+            source="upload",
+            set_active=True,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.warning(f"Photo conversion failed: {e}")
+        logger.warning(f"Photo upload failed for {username}: {e}")
         raise HTTPException(status_code=400, detail="Could not process image")
 
-    with open(filepath, "wb") as f:
-        f.write(jpeg_bytes)
-
-    # Set as active photo (symlink or marker file)
-    active_path = os.path.join(MEDIA_DIR, f"profile_{username}_active.jpg")
-    import shutil
-    shutil.copy2(filepath, active_path)
-
-    # Look up staff member
-    recon = await db.execute(
-        select(StaffReconciliation).where(func.lower(StaffReconciliation.username) == username.lower())
-    )
-    staff = recon.scalar_one_or_none()
-
-    paxton_synced = False
+    # Opportunistic Google Workspace photo sync — if the integration is
+    # configured and the staff row has an email, push there too. Any
+    # error degrades gracefully (we have the authoritative copy in DB).
     google_synced = False
-
-    # Sync to Paxton if matched
-    if staff and staff.paxton_id and jpeg_bytes:
-        try:
-            from app.integrations.paxton.adapter import PaxtonAdapter
-            paxton = PaxtonAdapter(db)
-            ok = await paxton.set_user_image(staff.paxton_id, jpeg_bytes)
-            if ok:
-                paxton_synced = True
-                logger.info(f"Synced photo to Paxton for {username} (id={staff.paxton_id})")
-        except Exception as e:
-            logger.warning(f"Paxton photo sync failed for {username}: {e}")
-
-    # Sync to Google if account exists
-    if staff and staff.email and jpeg_bytes:
-        try:
-            from app.integrations.google.adapter import GoogleWorkspaceAdapter
-            google = GoogleWorkspaceAdapter(db)
-            await google.update_user_photo(staff.email, jpeg_bytes)
-            google_synced = True
-            logger.info(f"Synced photo to Google for {username}")
-        except Exception as e:
-            logger.warning(f"Google photo sync failed for {username}: {e}")
+    try:
+        from app.modules.staff.models import StaffReconciliation
+        from sqlalchemy import func
+        recon = await db.execute(
+            select(StaffReconciliation).where(func.lower(StaffReconciliation.username) == username.lower())
+        )
+        staff = recon.scalar_one_or_none()
+        if staff and staff.email:
+            try:
+                from app.integrations.google.adapter import GoogleWorkspaceAdapter
+                await GoogleWorkspaceAdapter(db).update_user_photo(staff.email, result["bytes"])
+                google_synced = True
+            except Exception as e:
+                logger.warning(f"Google photo sync failed for {username}: {e}")
+    except ModuleNotFoundError:
+        pass  # Google integration not present in this fork
 
     await log_action(db, actor=user.email, action="staff.profile.photo",
                      module="staff", target=username,
                      ip_address=request.client.host if request.client else None)
     await db.commit()
 
-    return {"ok": True, "filename": filename, "paxton_synced": paxton_synced, "google_synced": google_synced}
+    return {
+        "ok": True,
+        "id": result["id"],
+        "filename": result["filename"],
+        "google_synced": google_synced,
+    }
 
 
 @router.get("/api/staff/profile/{username}/photos")
@@ -1749,56 +1724,22 @@ async def list_profile_photos(
     user: User = Depends(require_action("staff.view")),
     db: AsyncSession = Depends(get_db),
 ):
-    """List all saved photos for a staff member, newest first.
+    """List all saved photos for a staff member, newest first."""
+    from app.modules.staff import photo_service
 
-    Includes:
-      - All local timestamped uploads (newest first)
-      - The Paxton photo as a fallback library entry, if the staff has
-        a Paxton ID with a synced photo. Lets the user see/restore the
-        previous photo from before any local uploads.
-    """
-    import glob
-    pattern = os.path.join(MEDIA_DIR, f"profile_{username}_2*.jpg")
-    files = sorted(glob.glob(pattern), reverse=True)
-    active_path = os.path.join(MEDIA_DIR, f"profile_{username}_active.jpg")
-    active_size = None
-    if os.path.isfile(active_path):
-        active_size = os.path.getsize(active_path)
+    rows = await photo_service.list_photos(db, username=username)
     photos = []
-    for f in files:
-        fname = os.path.basename(f)
-        parts = fname.replace(".jpg", "").split("_")
-        ts_str = "_".join(parts[-2:]) if len(parts) >= 2 else ""
-        is_active = active_size is not None and os.path.getsize(f) == active_size
+    for r in rows:
+        fname = r["filename"]
         photos.append({
+            "id": r["id"],
             "filename": fname,
-            "url": f"/api/staff/media/{fname}{_photo_cache_buster(fname)}",
-            "timestamp": ts_str,
-            "active": is_active,
-            "source": "upload",
+            "url": f"/api/staff/media/{fname}{photo_service.photo_cache_buster(fname)}",
+            "timestamp": r["uploaded_at"].strftime("%Y%m%d_%H%M%S") if r["uploaded_at"] else "",
+            "uploaded_by": r["uploaded_by"],
+            "active": r["is_active"],
+            "source": r["source"],
         })
-
-    # Append Paxton photo as a library entry (read-only — can't be set
-    # active, but useful to compare against the locally-uploaded versions).
-    # Trust the file system, not the has_paxton_photo flag — that flag
-    # is recon-job-driven and lags behind disk by hours/days, so 83 staff
-    # had their Paxton photo on disk but the flag stale-false.
-    from app.modules.staff.models import StaffReconciliation
-    from sqlalchemy import select as _sel, func as _f
-    s = (await db.execute(
-        _sel(StaffReconciliation).where(_f.lower(StaffReconciliation.username) == username.lower())
-    )).scalar_one_or_none()
-    if s and s.paxton_id:
-        pname = f"paxton_{s.paxton_id}.jpg"
-        if os.path.isfile(os.path.join(MEDIA_DIR, pname)):
-            photos.append({
-                "filename": pname,
-                "url": f"/api/staff/media/{pname}{_photo_cache_buster(pname)}",
-                "timestamp": "Paxton",
-                "active": False,
-                "source": "paxton",
-            })
-
     return {"photos": photos}
 
 
@@ -1809,59 +1750,100 @@ async def set_active_photo(
     user: User = Depends(require_action("staff.provision.execute")),
     db: AsyncSession = Depends(get_db),
 ):
-    """Set an existing photo as the active profile photo. Syncs to Paxton + Google."""
+    """Set an existing photo as the active profile photo.
+
+    Accepts either {"photo_id": N} (preferred — stable DB primary key)
+    or {"filename": "..."} (legacy — resolves to the matching row's id).
+    Opportunistically pushes the activated photo to Google Workspace."""
+    from app.modules.staff import photo_service
     body = await request.json()
-    filename = body.get("filename", "")
-    # Validate filename belongs to this user
-    if not filename.startswith(f"profile_{username}_") or not filename.endswith(".jpg"):
-        raise HTTPException(status_code=400, detail="Invalid filename")
-    filepath = os.path.join(MEDIA_DIR, filename)
-    if not os.path.isfile(filepath):
-        raise HTTPException(status_code=404, detail="Photo not found")
 
-    # Update active symlink/copy
-    active_path = os.path.join(MEDIA_DIR, f"profile_{username}_active.jpg")
-    import shutil
-    shutil.copy2(filepath, active_path)
+    photo_id = body.get("photo_id")
+    if photo_id is None:
+        # Legacy clients send filename
+        filename = body.get("filename", "")
+        if not filename:
+            raise HTTPException(status_code=400, detail="photo_id or filename required")
+        from sqlalchemy import text as _text
+        row = (await db.execute(
+            _text("""
+                SELECT id FROM staff_photos
+                WHERE filename = :f AND lower(staff_username) = lower(:u)
+            """),
+            {"f": filename, "u": username},
+        )).first()
+        if not row:
+            raise HTTPException(status_code=404, detail="Photo not found")
+        photo_id = row[0]
 
-    # Sync to external systems
-    with open(filepath, "rb") as f:
-        jpeg_bytes = f.read()
+    result = await photo_service.set_active(db, username=username, photo_id=int(photo_id))
+    if not result:
+        raise HTTPException(status_code=404, detail="Photo not found for this user")
 
-    from app.modules.staff.models import StaffReconciliation
-    from sqlalchemy import func
-    recon = await db.execute(
-        select(StaffReconciliation).where(func.lower(StaffReconciliation.username) == username.lower())
-    )
-    staff = recon.scalar_one_or_none()
-    paxton_synced = False
+    # Opportunistic Google sync.
     google_synced = False
-
-    if staff and staff.paxton_id:
-        try:
-            from app.integrations.paxton.adapter import PaxtonAdapter
-            paxton = PaxtonAdapter(db)
-            ok = await paxton.set_user_image(staff.paxton_id, jpeg_bytes)
-            if ok:
-                paxton_synced = True
-        except Exception as e:
-            logger.warning(f"Paxton photo sync failed: {e}")
-
-    if staff and staff.email:
-        try:
-            from app.integrations.google.adapter import GoogleWorkspaceAdapter
-            google = GoogleWorkspaceAdapter(db)
-            await google.update_user_photo(staff.email, jpeg_bytes)
-            google_synced = True
-        except Exception as e:
-            logger.warning(f"Google photo sync failed: {e}")
+    try:
+        with open(os.path.join(photo_service.MEDIA_DIR, result["filename"]), "rb") as f:
+            jpeg_bytes = f.read()
+        from app.modules.staff.models import StaffReconciliation
+        from sqlalchemy import func
+        recon = await db.execute(
+            select(StaffReconciliation).where(func.lower(StaffReconciliation.username) == username.lower())
+        )
+        staff = recon.scalar_one_or_none()
+        if staff and staff.email:
+            try:
+                from app.integrations.google.adapter import GoogleWorkspaceAdapter
+                await GoogleWorkspaceAdapter(db).update_user_photo(staff.email, jpeg_bytes)
+                google_synced = True
+            except Exception as e:
+                logger.warning(f"Google photo sync failed: {e}")
+    except (ModuleNotFoundError, FileNotFoundError):
+        pass
 
     await log_action(db, actor=user.email, action="staff.profile.photo.set_active",
-                     module="staff", target=f"{username}/{filename}",
+                     module="staff", target=f"{username}/{result['filename']}",
                      ip_address=request.client.host if request.client else None)
     await db.commit()
 
-    return {"ok": True, "paxton_synced": paxton_synced, "google_synced": google_synced}
+    return {"ok": True, "google_synced": google_synced}
+
+
+@router.delete("/api/staff/profile/{username}/photos/{photo_id}")
+async def delete_profile_photo(
+    username: str,
+    photo_id: int,
+    request: Request,
+    user: User = Depends(require_action("staff.view")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a photo. Users may delete their own uploads; admins may
+    delete any. Returns 403 if the actor is neither the uploader nor
+    an admin."""
+    from app.modules.staff import photo_service
+
+    # "Admin" for photo deletion = has the elevated provision permission.
+    # Mirrors the gating on upload/set-active so photo lifecycle is
+    # consistent with the rest of the staff module.
+    from app.policies.engine import get_user_permissions, check_permission
+    perms = await get_user_permissions(db, user.id)
+    actor_is_admin = check_permission(perms, "staff.provision.execute")
+
+    deleted = await photo_service.delete_photo(
+        db,
+        username=username,
+        photo_id=photo_id,
+        actor_email=user.email or "",
+        actor_is_admin=actor_is_admin,
+    )
+    if not deleted:
+        raise HTTPException(status_code=403, detail="Photo not found or not permitted")
+
+    await log_action(db, actor=user.email, action="staff.profile.photo.delete",
+                     module="staff", target=f"{username}/{photo_id}",
+                     ip_address=request.client.host if request.client else None)
+    await db.commit()
+    return {"ok": True}
 
 
 # ── API: Reconciliation Refresh ──────────────────────────────────────────
@@ -3543,14 +3525,23 @@ async def get_id_card(
         if fallback_title:
             custom_fields[10] = fallback_title
 
-    # Photo: Paxton-synced file → most recent processed queue photo.
-    # Both files went through the same photo processor (EXIF orient +
-    # face crop + aspect fit).
+    # Photo: active staff_photos row → most recent processed queue
+    # photo. Both files went through the same photo processor (EXIF
+    # orient + face crop + aspect fit). Username is derived from the
+    # email local-part per the district username convention — matches
+    # whatever upload_profile_photo wrote.
     photo_path = None
-    if row["paxton_id"]:
-        cand = f"/app/data/photos/paxton_{row['paxton_id']}.jpg"
-        if os.path.exists(cand):
-            photo_path = cand
+    username_from_email = email.split("@")[0] if email else ""
+    if username_from_email:
+        p_row = (await db.execute(text("""
+            SELECT filename FROM staff_photos
+            WHERE lower(staff_username) = lower(:u) AND is_active
+            LIMIT 1
+        """).bindparams(u=username_from_email))).first()
+        if p_row:
+            cand = os.path.join(MEDIA_DIR, p_row[0])
+            if os.path.exists(cand):
+                photo_path = cand
     if not photo_path:
         q_row = (await db.execute(text("""
             SELECT photo_path FROM staff_queue
