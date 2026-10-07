@@ -74,6 +74,7 @@ services:
       DOMAIN: ${DOMAIN}
       ALLOWED_DOMAINS: ${ALLOWED_DOMAINS:-}
       ORIGIN_CHECK_PERMISSIVE: ${ORIGIN_CHECK_PERMISSIVE:-}
+      ENFORCE_2FA: ${ENFORCE_2FA:-}
       POSTGRES_HOST: nexus-lite-postgres
       POSTGRES_USER: ${POSTGRES_USER:-nexus_admin}
       POSTGRES_DB: ${POSTGRES_DB:-command_nexus_lite}

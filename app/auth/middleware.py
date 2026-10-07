@@ -136,12 +136,18 @@ class AuthMiddleware(BaseHTTPMiddleware):
         except Exception:
             pass
 
-        # ── 2FA enforcement — re-checked periodically for active sessions ──
-        if not await self._check_session_2fa(request):
-            request.session.clear()
-            if path.startswith("/api/"):
-                return JSONResponse({"detail": "2FA required"}, status_code=403)
-            return RedirectResponse(url="/?error=2fa_required")
+        # ── 2FA enforcement — opt-in via ENFORCE_2FA env var, and
+        # only ever applies to Google-authenticated sessions. Local-
+        # auth sessions have their own argon2 + per-email lockout
+        # story and are unaffected.
+        from app.config import get_settings as _gs
+        _auth_method = request.session.get("auth_method", "")
+        if _gs().enforce_2fa and _auth_method != "local":
+            if not await self._check_session_2fa(request):
+                request.session.clear()
+                if path.startswith("/api/"):
+                    return JSONResponse({"detail": "2FA required"}, status_code=403)
+                return RedirectResponse(url="/?error=2fa_required")
 
         return await call_next(request)
 

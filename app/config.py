@@ -95,6 +95,12 @@ class Settings:
         # ACCOUNT backend features (Directory, Gmail, Sheets); that
         # dependency is unrelated to this flag.
         self.google_auth_enabled = os.environ.get("GOOGLE_AUTH_ENABLED", "false").lower() in ("1", "true", "yes", "on")
+
+        # Enforce Google 2SV at login + continuously via middleware. Off by
+        # default — the receiving district decides based on their own
+        # policy. Only applies to Google-authenticated sessions; local-auth
+        # has its own argon2+lockout path and is unaffected either way.
+        self.enforce_2fa = os.environ.get("ENFORCE_2FA", "false").lower() in ("1", "true", "yes", "on")
         self.google_client_id = _read_secret("google_client_id", "GOOGLE_CLIENT_ID", "")
         self.google_client_secret = _read_secret("google_client_secret", "GOOGLE_CLIENT_SECRET", "")
         self.google_domain = os.environ.get("GOOGLE_DOMAIN", "")

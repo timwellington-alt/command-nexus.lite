@@ -155,13 +155,15 @@ async def callback(
         logger.warning(f"Login denied — wrong domain: {email} (hd={hd})")
         return RedirectResponse(url="/?error=wrong_domain")
 
-    # Enforce 2-Step Verification — fail closed
-    # Command Nexus has access to sensitive operational data; 2FA is required.
-    # If the check itself fails (SDK unavailable, missing creds), login is blocked.
-    from app.auth.group_sync import check_2fa_enrolled
-    if not await check_2fa_enrolled(email):
-        logger.warning(f"Login denied — 2FA not enrolled: {email}")
-        return RedirectResponse(url="/?error=2fa_required")
+    # Enforce Google 2SV at login — opt-in via ENFORCE_2FA env var.
+    # Off by default in the lite template; the receiving district
+    # decides based on their own security policy. When on, fails closed
+    # — SDK errors / missing creds / unenrolled all block login.
+    if get_settings().enforce_2fa:
+        from app.auth.group_sync import check_2fa_enrolled
+        if not await check_2fa_enrolled(email):
+            logger.warning(f"Login denied — 2FA not enrolled: {email}")
+            return RedirectResponse(url="/?error=2fa_required")
 
     # Upsert user
     result = await db.execute(select(User).where(User.email == email))
