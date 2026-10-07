@@ -191,11 +191,19 @@ async def local_login(
     # users with the flag set.
     dest = "/auth/local/change-password" if row["must_change_password"] else "/dashboard"
     resp = RedirectResponse(url=dest, status_code=303)
+
+    # Secure flag follows the request scheme, not APP_ENV. Setting
+    # Secure on a cookie sent in reply to an HTTP request causes the
+    # browser to silently drop it — classic "login succeeds but
+    # bounces to login screen" symptom. If the reverse proxy
+    # terminates TLS, X-Forwarded-Proto will say https.
+    _xfp = request.headers.get("x-forwarded-proto", "").lower()
+    is_https = request.url.scheme == "https" or _xfp == "https"
     resp.set_cookie(
         "session", new_cookie,
         max_age=int(SESSION_TTL.total_seconds()),
         httponly=True, samesite="lax",
-        secure=settings.is_production, path="/",
+        secure=is_https, path="/",
     )
     return resp
 
