@@ -156,6 +156,35 @@ async def local_login(
     await db.execute(text("""
         UPDATE local_users SET last_login = NOW() WHERE id = :id
     """).bindparams(id=row["id"]))
+
+    # Mirror into users + user_roles so every downstream endpoint
+    # (which looks up users by email, not local_users) sees this
+    # account. Idempotent — upserts the row + ensures the admin
+    # role assignment matches local_users.is_admin.
+    users_row = (await db.execute(text("""
+        INSERT INTO users (email, name, is_active, last_login, created_at)
+        VALUES (:e, :n, true, NOW(), NOW())
+        ON CONFLICT (email) DO UPDATE SET
+            name = EXCLUDED.name,
+            is_active = true,
+            last_login = NOW()
+        RETURNING id
+    """).bindparams(e=email, n=row["display_name"] or email))).first()
+    _user_id = users_row[0]
+
+    if row["is_admin"]:
+        # Ensure the admin role is assigned. role_permissions seeded
+        # in a002 — role 'admin' always exists.
+        _role = (await db.execute(text(
+            "SELECT id FROM roles WHERE name = 'admin'"
+        ))).first()
+        if _role:
+            await db.execute(text("""
+                INSERT INTO user_roles (user_id, role_id, scope_type, scope_value, created_at)
+                VALUES (:u, :r, 'district', '*', NOW())
+                ON CONFLICT DO NOTHING
+            """).bindparams(u=_user_id, r=_role[0]))
+
     await log_action(
         db, actor=email, action="auth.local.ok",
         module="auth", target=email,
