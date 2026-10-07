@@ -79,6 +79,14 @@ fi
 echo
 
 mkdir -p secrets
+# Protect the dir at 700 — other local users on the host can't list
+# or traverse. Individual secret files inside are 644 so the non-root
+# 'nexus' uid inside the container (which doesn't match the host
+# invoking user's uid) can read the bind-mounted file. Compose
+# bind-mounts the specific file inode into the container, so the
+# container doesn't need traversal perms on the host parent dir —
+# 700 dir + 644 file is both safe on the host and container-readable.
+chmod 700 secrets
 
 # Pre-create bind-mount source directories. Git doesn't track empty
 # dirs so these are missing on a fresh clone; Docker tolerates missing
@@ -88,13 +96,15 @@ mkdir -p data/photos data/exports
 
 # Generate any missing secret files. Existing files are left alone so
 # a re-run doesn't rotate credentials Postgres already initialized on.
+# 644 (not 600) — see comment above about container uid mismatch.
 gen_secret() {
     local path="$1"; local generator="$2"
     if [ ! -s "$path" ]; then
         eval "$generator" > "$path"
-        chmod 600 "$path"
+        chmod 644 "$path"
         echo "  generated $path"
     else
+        chmod 644 "$path"
         echo "  keeping existing $path"
     fi
 }
@@ -114,7 +124,7 @@ gen_secret secrets/settings_encryption_key  "python3 -c 'from cryptography.ferne
 for stub in secrets/google_client_id secrets/google_client_secret secrets/google_service_account.json; do
     if [ ! -e "$stub" ]; then
         touch "$stub"
-        chmod 600 "$stub"
+        chmod 644 "$stub"
         echo "  stubbed empty $stub (fill in later if you enable Google SSO)"
     fi
 done
@@ -130,7 +140,7 @@ if is_true "$GOOGLE_AUTH_ENABLED"; then
         echo "  → copy the Client ID (ends in .apps.googleusercontent.com)"
         read -p "  Paste it here: " gci
         printf '%s' "$gci" > secrets/google_client_id
-        chmod 600 secrets/google_client_id
+        chmod 644 secrets/google_client_id
     fi
     if [ ! -s secrets/google_client_secret ]; then
         echo
@@ -138,7 +148,7 @@ if is_true "$GOOGLE_AUTH_ENABLED"; then
         echo "  the Client ID above; you can regenerate from the Credentials page)."
         read -sp "  Client Secret: " gcs; echo
         printf '%s' "$gcs" > secrets/google_client_secret
-        chmod 600 secrets/google_client_secret
+        chmod 644 secrets/google_client_secret
     fi
     if [ ! -s secrets/google_service_account.json ]; then
         echo
@@ -160,7 +170,7 @@ if is_true "$GOOGLE_AUTH_ENABLED"; then
     read -p "Google admin email (must exist in your Workspace): " admin_email
     if [ -n "$admin_email" ]; then
         echo "$admin_email" > secrets/bootstrap_admin_email
-        chmod 600 secrets/bootstrap_admin_email
+        chmod 644 secrets/bootstrap_admin_email
     fi
 fi
 
@@ -173,7 +183,7 @@ if is_true "$LOCAL_AUTH_ENABLED"; then
     read -sp "  Local admin password (≥ 12 chars, or empty to skip): " local_pw; echo
     if [ -n "$local_email" ] && [ "${#local_pw}" -ge 12 ]; then
         printf '%s\n%s' "$local_email" "$local_pw" > secrets/bootstrap_local_admin
-        chmod 600 secrets/bootstrap_local_admin
+        chmod 644 secrets/bootstrap_local_admin
         echo "  seed written to secrets/bootstrap_local_admin"
         echo "  (the api container applies it on first boot, then removes the file)"
     elif [ -n "$local_email" ] || [ -n "$local_pw" ]; then
