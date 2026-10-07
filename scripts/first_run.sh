@@ -201,25 +201,19 @@ fi
 if is_true "$LOCAL_AUTH_ENABLED"; then
     echo
     echo "  Local admin seed (optional)."
-    echo "  Press ENTER on both prompts to skip — the API will then auto-create"
-    echo "  admin@local / changeme123! on first boot (forced password change)."
+    echo "  Press ENTER on both prompts to skip — the seeder will then"
+    echo "  create admin@local / changeme123! after migrations (forced"
+    echo "  password change on first login)."
     read -p "  Local admin email: " local_email
     read -sp "  Local admin password (≥ 12 chars, or empty to skip): " local_pw; echo
     if [ -n "$local_email" ] && [ "${#local_pw}" -ge 12 ]; then
-        printf '%s\n%s' "$local_email" "$local_pw" > secrets/bootstrap_local_admin
-        echo "  seed written to secrets/bootstrap_local_admin"
-        echo "  (the api container applies it on first boot, then removes the file)"
+        echo "  will seed '$local_email' after migrations"
     elif [ -n "$local_email" ] || [ -n "$local_pw" ]; then
-        echo "  (incomplete input — skipping local seed, default admin will be used)" >&2
-        # Keep an empty file so the compose bind-mount source always
-        # exists — the api lifespan treats an empty / 1-line file as
-        # "no seed" and falls through to the admin@local default.
-        : > secrets/bootstrap_local_admin
+        echo "  (incomplete input — default admin@local will be used)" >&2
+        local_email=""; local_pw=""
     else
         echo "  (no local admin seeded — default admin@local will be used)"
-        : > secrets/bootstrap_local_admin
     fi
-    chmod 644 secrets/bootstrap_local_admin
 fi
 
 echo
@@ -273,6 +267,25 @@ done
 echo
 echo "-- running database migrations --"
 docker compose exec -T api alembic upgrade head
+
+echo
+echo "-- seeding local admin --"
+# Seed via explicit CLI so any failure is visible here, not swallowed
+# by the API lifespan. Passes operator-entered email+password if they
+# answered the prompt earlier, else falls back to the default
+# admin@local / changeme123! with forced password change.
+if is_true "$LOCAL_AUTH_ENABLED"; then
+    if [ -n "${local_email:-}" ] && [ "${#local_pw}" -ge 12 ]; then
+        docker compose exec -T api python -m app.scripts.seed_local_admin \
+            --email "$local_email" --password "$local_pw"
+    else
+        docker compose exec -T api python -m app.scripts.seed_local_admin
+    fi
+    if [ "$?" != "0" ]; then
+        echo "ERROR: local admin seeding failed. See the traceback above." >&2
+        exit 1
+    fi
+fi
 
 echo
 echo "-- waiting for API to be healthy --"
