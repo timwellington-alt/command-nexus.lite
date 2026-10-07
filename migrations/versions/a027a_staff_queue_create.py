@@ -38,6 +38,8 @@ def upgrade() -> None:
         sa.Column("details", sa.Text()),
         sa.Column("source", sa.String(50)),
         sa.Column("status", sa.String(50), nullable=False, server_default="pending"),
+        sa.Column("error", sa.Text()),
+        sa.Column("completed_at", sa.DateTime(timezone=True)),
         sa.Column("created_at", sa.DateTime(timezone=True),
                   nullable=False, server_default=sa.text("NOW()")),
         sa.Column("updated_at", sa.DateTime(timezone=True)),
