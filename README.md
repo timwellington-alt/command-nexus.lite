@@ -189,6 +189,20 @@ always a one-line import path correction.
 `alembic upgrade head` inside the api container automatically. No
 manual bootstrap needed.
 
+**`asyncpg.exceptions.InvalidPasswordError`:** the postgres data
+volume outlived its initial password. Postgres only honors
+`POSTGRES_PASSWORD_FILE` on the very first init of an empty data
+dir; any subsequent change in `secrets/postgres_password` is
+ignored. Happens when the stack was partially started, torn down
+without `-v`, and the secrets were regenerated. Fix on a fresh
+install (no real data yet):
+```bash
+docker compose down -v        # drops postgres + redis volumes
+docker compose up -d
+docker compose exec api alembic upgrade head
+```
+Never run `-v` once you have real production data.
+
 ## License
 
 Shared as-is with no warranty. Use it, fork it, modify it. PRs welcome
