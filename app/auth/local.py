@@ -32,7 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.db.engine import get_db
 from app.audit.service import log_action
-from app.auth.session_store import rotate_session
+from app.auth.session_store import rotate_session, SESSION_COOKIE
 
 logger = logging.getLogger(__name__)
 
@@ -170,7 +170,7 @@ async def local_login(
     r = aioredis.from_url(settings.redis_url, decode_responses=True)
     try:
         from app.auth.session_store import SESSION_TTL
-        old = request.cookies.get("session")
+        old = request.cookies.get(SESSION_COOKIE)
         new_cookie = await rotate_session(
             r, old,
             new_data={
@@ -200,7 +200,7 @@ async def local_login(
     _xfp = request.headers.get("x-forwarded-proto", "").lower()
     is_https = request.url.scheme == "https" or _xfp == "https"
     resp.set_cookie(
-        "session", new_cookie,
+        SESSION_COOKIE, new_cookie,
         max_age=int(SESSION_TTL.total_seconds()),
         httponly=True, samesite="lax",
         secure=is_https, path="/",
@@ -399,7 +399,7 @@ async def local_logout(request: Request):
     r = aioredis.from_url(settings.redis_url, decode_responses=True)
     try:
         from app.auth.session_store import _unsign_session_id
-        old = request.cookies.get("session")
+        old = request.cookies.get(SESSION_COOKIE)
         if old:
             sid = _unsign_session_id(old, settings.app_secret_key)
             if sid:
@@ -407,5 +407,5 @@ async def local_logout(request: Request):
     finally:
         await r.aclose()
     resp = RedirectResponse(url="/", status_code=303)
-    resp.delete_cookie("session", path="/")
+    resp.delete_cookie(SESSION_COOKIE, path="/")
     return resp
