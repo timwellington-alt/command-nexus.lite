@@ -99,10 +99,14 @@ class AuthMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         # ── CSRF protection on mutating requests ──
-        # Local-auth login POST exempt — the user has no session yet so
-        # there's no custom-header to assert. Origin/Referer check still
-        # happens inside the handler; cross-origin login POSTs fail there.
-        if request.method in ("POST", "PUT", "PATCH", "DELETE") and path != "/auth/local/login":
+        # Local-auth form POSTs exempt — plain HTML form submits can't
+        # set X-Requested-With, and these routes do their own
+        # Origin/Referer check inside the handler.
+        _CSRF_EXEMPT_FORM_POSTS = {
+            "/auth/local/login",
+            "/auth/local/change-password",
+        }
+        if request.method in ("POST", "PUT", "PATCH", "DELETE") and path not in _CSRF_EXEMPT_FORM_POSTS:
             if not self._check_csrf(request, settings):
                 if path.startswith("/api/"):
                     return JSONResponse({"detail": "CSRF validation failed"}, status_code=403)
@@ -211,15 +215,19 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         Both signals are required. A same-site browser POST without the custom
         header is rejected. Does NOT rely on Content-Type alone.
+
+        Permissive mode (DOMAIN at placeholder or ORIGIN_CHECK_PERMISSIVE=true)
+        skips Signal 1's host-match requirement. Signal 2 still required.
         """
         allowed_hosts = self._get_allowed_hosts(settings)
+        permissive = getattr(settings, "origin_check_permissive", False)
 
-        # Signal 1: Origin or Referer must match
+        # Signal 1: Origin or Referer must match (unless permissive mode)
         source_ok = False
         origin = request.headers.get("origin")
         if origin:
             parsed = urlparse(origin)
-            if parsed.hostname not in allowed_hosts:
+            if parsed.hostname not in allowed_hosts and not permissive:
                 logger.warning(f"CSRF: Origin mismatch: {origin}")
                 return False
             source_ok = True
@@ -228,7 +236,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             referer = request.headers.get("referer")
             if referer:
                 parsed = urlparse(referer)
-                if parsed.hostname not in allowed_hosts:
+                if parsed.hostname not in allowed_hosts and not permissive:
                     logger.warning(f"CSRF: Referer mismatch: {referer}")
                     return False
                 source_ok = True
