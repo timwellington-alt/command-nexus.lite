@@ -207,14 +207,19 @@ if is_true "$LOCAL_AUTH_ENABLED"; then
     read -sp "  Local admin password (≥ 12 chars, or empty to skip): " local_pw; echo
     if [ -n "$local_email" ] && [ "${#local_pw}" -ge 12 ]; then
         printf '%s\n%s' "$local_email" "$local_pw" > secrets/bootstrap_local_admin
-        chmod 644 secrets/bootstrap_local_admin
         echo "  seed written to secrets/bootstrap_local_admin"
         echo "  (the api container applies it on first boot, then removes the file)"
     elif [ -n "$local_email" ] || [ -n "$local_pw" ]; then
         echo "  (incomplete input — skipping local seed, default admin will be used)" >&2
+        # Keep an empty file so the compose bind-mount source always
+        # exists — the api lifespan treats an empty / 1-line file as
+        # "no seed" and falls through to the admin@local default.
+        : > secrets/bootstrap_local_admin
     else
         echo "  (no local admin seeded — default admin@local will be used)"
+        : > secrets/bootstrap_local_admin
     fi
+    chmod 644 secrets/bootstrap_local_admin
 fi
 
 echo

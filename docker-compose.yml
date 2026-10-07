@@ -94,6 +94,7 @@ services:
       - google_client_secret
       - settings_encryption_key
       - google_service_account.json
+      - bootstrap_local_admin
     networks:
       - nexus-internal
     depends_on:
@@ -216,3 +217,5 @@ secrets:
     file: ./secrets/settings_encryption_key
   google_service_account.json:
     file: ./secrets/google_service_account.json
+  bootstrap_local_admin:
+    file: ./secrets/bootstrap_local_admin
