@@ -48,20 +48,31 @@ logs. A 4 GB / 40 GB / 2-core VM runs this comfortably.
 See [docs/DISTRICT_SETUP.pdf](docs/DISTRICT_SETUP.pdf) (or
 [docs/DISTRICT_SETUP.md](docs/DISTRICT_SETUP.md)) for the full walkthrough
 including the Google Cloud project setup, OAuth 2.0 Client creation,
-and TLS options. TL;DR:
+and TLS options. TL;DR for a plain HTTP LAN deployment:
 
 ```bash
 git clone https://github.com/timwellington-alt/command-nexus.lite.git command-nexus-lite
 cd command-nexus-lite
-sudo ./scripts/install_prereqs.sh        # Docker + Compose + deps
+sudo ./scripts/install_prereqs.sh         # Docker + Compose + deps; grants docker-socket access
 cp .env.example .env
-$EDITOR .env
-cp <path-to-your-service-account>.json secrets/google_service_account.json
-./scripts/first_run.sh                    # prompts for OAuth client ID + secret
-docker compose up -d                      # or use a TLS override, see below
+$EDITOR .env                              # set DOMAIN (and optional Google vars)
+./scripts/first_run.sh                    # generates secrets, builds, runs migrations, brings stack up
 ```
 
-Then log in at `https://<your-domain>/` with the admin email you seeded.
+That's it. `first_run.sh` prints the login URL and credentials at the
+end. Local auth is on by default — the first login is `admin@local` /
+`changeme123!`, forced to change on first use.
+
+If you plan to layer a TLS overlay (Caddy, DNS-01, local internal CA),
+answer **N** to `first_run.sh`'s "bring the stack up now?" prompt and
+run the overlay compose command yourself afterwards — see TLS section
+below.
+
+If you want Google SSO, set `GOOGLE_AUTH_ENABLED=true` in `.env` before
+running `first_run.sh` and it'll prompt for the OAuth client ID +
+secret. Backend Google features (Directory API, Gmail attendance,
+Sheets sync) additionally need a service account at
+`secrets/google_service_account.json`.
 
 ## TLS — pick one path
 
@@ -149,38 +160,34 @@ Short version:
 Full walkthrough with screenshots and admin-console paths in
 [docs/DISTRICT_SETUP.pdf](docs/DISTRICT_SETUP.pdf).
 
-## Known issues (first-run)
+## Troubleshooting
 
-**1. Database bootstrap:** `alembic upgrade head` currently expects a
-few base tables to pre-exist. First-run workaround:
+**Permission denied on `/var/run/docker.sock`:** `install_prereqs.sh`
+grants the invoking user immediate socket access via `setfacl` and
+adds them to the docker group. If a subsequent shell still can't
+reach the daemon, log out of SSH and log back in — every new login
+shell picks up the group from `/etc/group`.
 
+**"invalid mount config for type bind" on compose up:** a bind-mount
+source directory is missing. `first_run.sh` pre-creates
+`data/photos`, `data/exports`, and empty Google secret stubs; if you
+hit this error without running `first_run.sh`, run it (it's
+idempotent) or manually:
 ```bash
-# After `docker compose up -d`, before anything else:
-docker exec nexus-lite-api python -c "
-import asyncio
-from app.db.engine import engine, Base
-import app.db.models                             # noqa
-import app.modules.staff.models                  # noqa
-import app.modules.roster.models                 # noqa
-import app.modules.staff.provisioning_profiles   # noqa
-async def go():
-    async with engine.begin() as c:
-        await c.run_sync(Base.metadata.create_all)
-asyncio.run(go())
-"
-docker exec nexus-lite-api alembic stamp head
-docker exec nexus-lite-api python -m app.db.seeds
+mkdir -p data/photos data/exports
+touch secrets/google_client_id secrets/google_client_secret secrets/google_service_account.json
 ```
 
-Once that runs, the stack boots cleanly on subsequent restarts. A
-future release will fold this into `scripts/first_run.sh`.
+**API container unhealthy, log shows `No module named 'app.X.Y'`:** a
+stripped-feature import leaked through the scrub. Open an issue with
+the full traceback — all remaining broken imports in the lite tree
+are *lazy* (inside functions), so they only fire on specific endpoints
+and don't block boot. If one does block boot, the fix is almost
+always a one-line import path correction.
 
-**2. Secrets file permissions:** Docker Compose `file:`-based secrets
-mount into the container owned by root with the host's permission
-bits preserved. `scripts/first_run.sh` chmods secrets to 600, but the
-api container runs as uid 999 and can't read them. Workaround: after
-`first_run.sh`, chmod 644 the secret files. Fix pending — compose
-`uid: "999"` on each secret definition is the proper solution.
+**Database on first boot:** `first_run.sh` runs
+`alembic upgrade head` inside the api container automatically. No
+manual bootstrap needed.
 
 ## License
 
