@@ -73,8 +73,11 @@ echo "== Command Nexus first-run =="
 echo
 
 if [ ! -f .env ]; then
-    echo "ERROR: .env not found. Copy .env.example to .env and edit it first." >&2
-    exit 1
+    # Auto-create from the shipped example. All defaults are safe for
+    # first boot — the operator can tune individual knobs later via
+    # the Settings UI (or by editing .env + restarting the stack).
+    cp .env.example .env
+    echo "created .env from .env.example (edit later for custom DOMAIN / Google SSO / 2FA)"
 fi
 
 # Source .env + apply the SAME defaults config.py uses, so an older

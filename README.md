@@ -54,14 +54,19 @@ and TLS options. TL;DR for a plain HTTP LAN deployment:
 git clone https://github.com/timwellington-alt/command-nexus.lite.git command-nexus-lite
 cd command-nexus-lite
 sudo ./scripts/install_prereqs.sh         # Docker + Compose + deps; grants docker-socket access
-cp .env.example .env
-nano .env                                 # (optional) set DOMAIN or enable Google SSO — defaults boot fine
-./scripts/first_run.sh                    # generates secrets, builds, runs migrations, brings stack up
+./scripts/first_run.sh                    # auto-creates .env, generates secrets, builds, migrates, starts
 ```
 
-That's it. `first_run.sh` prints the login URL and credentials at the
-end. Local auth is on by default — the first login is `admin@local` /
-`changeme123!`, forced to change on first use.
+That's it — three commands. `first_run.sh` prints the login URL and
+credentials at the end. Local auth is on by default — the first login
+is `admin@local` / `changeme123!`, forced to change on first use.
+
+All configuration happens AFTER you're logged in, through the Settings
+UI (district name, buildings, SIS integration, 2FA policy, etc.).
+No pre-boot `.env` editing required. If you later need to tune the
+handful of env-var-controlled flags (DOMAIN, GOOGLE_AUTH_ENABLED,
+ENFORCE_2FA, ORIGIN_CHECK_PERMISSIVE), edit `.env` then
+`docker compose up -d` to pick up changes.
 
 If `install_prereqs.sh` fails midway with an apt fetch error (transient
 network to Ubuntu mirrors), rerun it — it's idempotent, and the second
