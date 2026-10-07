@@ -104,11 +104,13 @@ async def local_login(
     treats this user identically to a Google-authenticated one."""
     # Belt-and-suspenders CSRF: middleware exempts this route (no session
     # yet, no custom header possible) so enforce Origin/Referer here.
+    # Config switches to permissive mode when DOMAIN is still a placeholder
+    # (first-boot UX) — see origin_check_permissive in config.py.
     from urllib.parse import urlparse
     settings = get_settings()
     allowed = settings.allowed_domains
     source = request.headers.get("origin") or request.headers.get("referer") or ""
-    if source:
+    if source and not settings.origin_check_permissive:
         host = urlparse(source).hostname
         if host and host not in allowed and host != "localhost":
             logger.warning("local_login: cross-origin POST from %s", source)

@@ -29,9 +29,33 @@ class Settings:
         self.app_env = os.environ.get("APP_ENV", "development")
         self.is_production = self.app_env == "production"
         self.domain = os.environ.get("DOMAIN", "localhost")
-        # Allowed domains for OAuth redirect (comma-separated, includes DOMAIN automatically)
+        # Allowed domains for OAuth redirect + local-login origin check
+        # (comma-separated, includes DOMAIN automatically).
         _extra = os.environ.get("ALLOWED_DOMAINS", "")
         self.allowed_domains = {self.domain} | {d.strip() for d in _extra.split(",") if d.strip()}
+
+        # Shareable-fork UX: if DOMAIN is still at the first-boot
+        # placeholder, the operator hasn't configured it yet. Rather
+        # than reject every login POST with "cross-origin login POST
+        # rejected", flip to permissive-origin mode so the operator
+        # can click through from any LAN IP / hostname. Logged loudly
+        # as a warning so a production deployer knows to set a real
+        # DOMAIN before shipping.
+        _PLACEHOLDER_DOMAINS = {
+            "nexus.yourdistrict.org", "your-district.example.com",
+            "example.com", "localhost",
+        }
+        self.origin_check_permissive = (
+            self.domain in _PLACEHOLDER_DOMAINS and not self.is_production
+        )
+        if self.origin_check_permissive:
+            import logging as _l
+            _l.getLogger(__name__).warning(
+                "DOMAIN is still at a placeholder value (%r) — login "
+                "origin check is in permissive mode. Set DOMAIN in .env "
+                "(and ALLOWED_DOMAINS for any aliases) before going to "
+                "production.", self.domain,
+            )
 
         # App secret
         self.app_secret_key = _read_secret("app_secret_key", "APP_SECRET_KEY", "change-me-in-production")
