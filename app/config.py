@@ -45,16 +45,19 @@ class Settings:
             "nexus.yourdistrict.org", "your-district.example.com",
             "example.com", "localhost",
         }
-        self.origin_check_permissive = (
-            self.domain in _PLACEHOLDER_DOMAINS and not self.is_production
-        )
+        # Permissive if DOMAIN is still a placeholder — regardless of
+        # APP_ENV. Rationale: if DOMAIN is unconfigured, APP_ENV status
+        # is unreliable too (the .env.example ships APP_ENV=production).
+        # The warning is sufficient to flag it; the strict check kicks
+        # back in the moment a real DOMAIN is set.
+        self.origin_check_permissive = self.domain in _PLACEHOLDER_DOMAINS
         if self.origin_check_permissive:
             import logging as _l
             _l.getLogger(__name__).warning(
                 "DOMAIN is still at a placeholder value (%r) — login "
                 "origin check is in permissive mode. Set DOMAIN in .env "
-                "(and ALLOWED_DOMAINS for any aliases) before going to "
-                "production.", self.domain,
+                "(and ALLOWED_DOMAINS for any aliases) to lock this "
+                "down before going public.", self.domain,
             )
 
         # App secret
