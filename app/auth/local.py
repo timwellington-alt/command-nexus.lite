@@ -31,7 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.db.engine import get_db
-from app.audit.audit_log import log_action
+from app.audit.service import log_action
 from app.auth.session_store import rotate_session
 
 logger = logging.getLogger(__name__)
