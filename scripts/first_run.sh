@@ -105,6 +105,20 @@ gen_secret secrets/postgres_password        "python3 -c 'import secrets; print(s
 gen_secret secrets/redis_password           "python3 -c 'import secrets; print(secrets.token_urlsafe(24))'"
 gen_secret secrets/settings_encryption_key  "python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'"
 
+# docker-compose.yml declares all seven secrets as bind-mount sources,
+# including the three Google ones. If a path is missing on disk compose
+# aborts the whole stack with "invalid mount config for type bind". In
+# local-auth-only mode nobody fills these in, so touch empty stubs —
+# the app reads them with a "" default when the file is empty and the
+# Google code paths don't fire anyway when google_auth_enabled=false.
+for stub in secrets/google_client_id secrets/google_client_secret secrets/google_service_account.json; do
+    if [ ! -e "$stub" ]; then
+        touch "$stub"
+        chmod 600 "$stub"
+        echo "  stubbed empty $stub (fill in later if you enable Google SSO)"
+    fi
+done
+
 # Google OAuth client (for Sign-in-with-Google) — only when flag is on.
 if is_true "$GOOGLE_AUTH_ENABLED"; then
     if [ ! -s secrets/google_client_id ]; then
