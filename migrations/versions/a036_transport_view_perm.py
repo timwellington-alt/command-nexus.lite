@@ -52,13 +52,11 @@ def upgrade() -> None:
         {"a": NEW_PERMISSION},
     ).fetchone()
     if not perm_row:
-        # transportation.view doesn't exist in the permissions table
-        # — this would be a much bigger deploy problem. Bail loudly.
-        raise RuntimeError(
-            f"Permission {NEW_PERMISSION!r} not found — cannot grant to "
-            f"{TRANSPORT_ROLE!r}. Check that transportation permissions "
-            "have been seeded."
-        )
+        # Permission doesn't exist. In the full nexus codebase this
+        # would be a deploy problem — but in forks that strip the
+        # transportation module (nexus-lite), the permission is
+        # genuinely absent and that's fine. Skip the grant.
+        return
     perm_id = perm_row[0]
 
     existing = conn.execute(
