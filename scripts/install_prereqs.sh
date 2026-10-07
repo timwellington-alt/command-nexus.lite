@@ -36,20 +36,24 @@ fi
 # acl is for setfacl — grants the invoking user immediate rw on the
 # docker socket so they don't have to log out + back in before docker
 # commands work. See the socket-ACL block below.
-log "Installing base packages (git, curl, ca-certificates, acl)…"
+#
+# Quiet flags intentionally omitted. apt/dnf progress output is noisy
+# but it reassures operators the install hasn't hung — a few minutes
+# of silence on a slow VM reads like a crash.
+log "Installing base packages (git, curl, ca-certificates, acl) — this may take 1–3 minutes…"
 if [ "$DISTRO" = "debian" ]; then
-    apt-get update -qq
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+    apt-get update
+    DEBIAN_FRONTEND=noninteractive apt-get install -y \
         git curl ca-certificates gnupg lsb-release acl
 else
-    dnf install -y -q git curl ca-certificates acl
+    dnf install -y git curl ca-certificates acl
 fi
 
 # ── Install Docker Engine ──────────────────────────────────────────
 if command -v docker >/dev/null 2>&1 && docker --version | grep -qE 'version 2[4-9]|version [3-9][0-9]'; then
     log "Docker Engine $(docker --version | awk '{print $3}' | tr -d ,) already installed — skipping"
 else
-    log "Installing Docker Engine from the official repository…"
+    log "Installing Docker Engine from the official repository — this may take 2–5 minutes…"
     if [ "$DISTRO" = "debian" ]; then
         install -m 0755 -d /etc/apt/keyrings
         curl -fsSL "https://download.docker.com/linux/$ID/gpg" \
@@ -59,12 +63,12 @@ else
         echo \
           "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/$ID $CODENAME stable" \
           > /etc/apt/sources.list.d/docker.list
-        apt-get update -qq
-        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+        apt-get update
+        DEBIAN_FRONTEND=noninteractive apt-get install -y \
             docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
     else
         dnf -y config-manager --add-repo "https://download.docker.com/linux/$ID/docker-ce.repo"
-        dnf install -y -q docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+        dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
     fi
 fi
 
