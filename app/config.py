@@ -45,19 +45,21 @@ class Settings:
             "nexus.yourdistrict.org", "your-district.example.com",
             "example.com", "localhost",
         }
-        # Permissive if DOMAIN is still a placeholder — regardless of
-        # APP_ENV. Rationale: if DOMAIN is unconfigured, APP_ENV status
-        # is unreliable too (the .env.example ships APP_ENV=production).
-        # The warning is sufficient to flag it; the strict check kicks
-        # back in the moment a real DOMAIN is set.
-        self.origin_check_permissive = self.domain in _PLACEHOLDER_DOMAINS
+        # Permissive origin check for first-boot UX:
+        #   1. Explicit opt-in via ORIGIN_CHECK_PERMISSIVE env var, OR
+        #   2. DOMAIN still at a placeholder (unconfigured deploy).
+        # The warning is enough to flag it; the strict check kicks back
+        # in the moment the operator sets a real DOMAIN and clears the
+        # env var.
+        _explicit = os.environ.get("ORIGIN_CHECK_PERMISSIVE", "").lower() in ("1", "true", "yes", "on")
+        self.origin_check_permissive = _explicit or (self.domain in _PLACEHOLDER_DOMAINS)
         if self.origin_check_permissive:
             import logging as _l
             _l.getLogger(__name__).warning(
-                "DOMAIN is still at a placeholder value (%r) — login "
-                "origin check is in permissive mode. Set DOMAIN in .env "
-                "(and ALLOWED_DOMAINS for any aliases) to lock this "
-                "down before going public.", self.domain,
+                "Login origin check is in PERMISSIVE mode (DOMAIN=%r, "
+                "explicit=%s). Set DOMAIN in .env and unset "
+                "ORIGIN_CHECK_PERMISSIVE to lock this down before "
+                "exposing publicly.", self.domain, _explicit,
             )
 
         # App secret
