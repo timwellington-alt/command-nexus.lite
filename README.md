@@ -55,13 +55,17 @@ git clone https://github.com/timwellington-alt/command-nexus.lite.git command-ne
 cd command-nexus-lite
 sudo ./scripts/install_prereqs.sh         # Docker + Compose + deps; grants docker-socket access
 cp .env.example .env
-$EDITOR .env                              # set DOMAIN (and optional Google vars)
+nano .env                                 # (optional) set DOMAIN or enable Google SSO — defaults boot fine
 ./scripts/first_run.sh                    # generates secrets, builds, runs migrations, brings stack up
 ```
 
 That's it. `first_run.sh` prints the login URL and credentials at the
 end. Local auth is on by default — the first login is `admin@local` /
 `changeme123!`, forced to change on first use.
+
+If `install_prereqs.sh` fails midway with an apt fetch error (transient
+network to Ubuntu mirrors), rerun it — it's idempotent, and the second
+pass usually completes.
 
 If you plan to layer a TLS overlay (Caddy, DNS-01, local internal CA),
 answer **N** to `first_run.sh`'s "bring the stack up now?" prompt and
