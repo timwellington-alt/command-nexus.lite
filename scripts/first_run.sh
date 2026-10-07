@@ -3,9 +3,32 @@
 #
 # Idempotent: safe to re-run. Only generates secrets that don't
 # already exist. Never overwrites existing values.
+#
+# Robust against being invoked from any directory: resolves $0 to an
+# absolute path before any cd / exec. Historically the sg-docker
+# re-exec below passed a relative $0 through, and if the invoking
+# shell wasn't at project root the second entry's `cd "$(dirname
+# "$0")/.."` landed inside a wrong directory, letting mkdir -p
+# silently create nested project dirs.
 set -euo pipefail
 
-cd "$(dirname "$0")/.."
+# Resolve the script's real path once, up front. readlink -f handles
+# relative paths, symlinks, and all cwd ambiguities.
+SELF="$(readlink -f -- "$0")"
+PROJECT_ROOT="$(dirname "$(dirname "$SELF")")"
+
+# Sanity gate: make sure we're actually in a nexus-lite checkout. If
+# a previous botched run already created a nested command-nexus-lite/
+# inside the real project root, this bails before mkdir -p compounds
+# the mess.
+if [ ! -f "$PROJECT_ROOT/docker-compose.yml" ] || [ ! -f "$PROJECT_ROOT/.env.example" ]; then
+    echo "ERROR: project root doesn't look right ($PROJECT_ROOT)." >&2
+    echo "       Expected docker-compose.yml + .env.example to exist there." >&2
+    echo "       Make sure you invoked the script from inside a clean nexus-lite checkout." >&2
+    exit 1
+fi
+
+cd "$PROJECT_ROOT"
 
 # ── Docker socket preflight ────────────────────────────────────────
 # install_prereqs.sh adds the user to the docker group, but Linux
@@ -16,7 +39,8 @@ cd "$(dirname "$0")/.."
 # Fix transparently: if the user IS in the docker group but the
 # current shell didn't pick it up, re-exec self via sg(1) which
 # activates the group for just this subprocess. User never sees the
-# error.
+# error. $SELF is the absolute path we resolved above, so the
+# re-exec'd script finds the project unambiguously.
 if ! docker info >/dev/null 2>&1; then
     if id -nG "${USER:-$(whoami)}" 2>/dev/null | tr ' ' '\n' | grep -qx docker; then
         if [ "${_FIRST_RUN_REEXECED:-0}" = "1" ]; then
@@ -26,7 +50,7 @@ if ! docker info >/dev/null 2>&1; then
         fi
         echo "docker group not active in this shell — re-executing via 'sg docker'…"
         export _FIRST_RUN_REEXECED=1
-        exec sg docker -c "$0 $*"
+        exec sg docker -c "$SELF $*"
     fi
     # Not in group at all: tell them to run install_prereqs
     cat >&2 <<EOF
