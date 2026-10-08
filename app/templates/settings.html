@@ -3973,7 +3973,27 @@ async function castNocNow() {
   setTimeout(() => msg.textContent = '', 8000);
 }
 
-loadSettings().then(() => testAll());
+loadSettings().then(() => {
+  testAll();
+  // Open the panel referenced in the URL hash (e.g. the Dashboard
+  // setup-checklist card links to /settings#panel-branding). Fires
+  // AFTER the sidebar is rendered — showPanel() needs the sidebar
+  // DOM to exist to flip the sidebar's active state too.
+  const h = (window.location.hash || "").trim();
+  if (h.startsWith("#panel-")) {
+    const key = h.slice("#panel-".length);
+    if (document.getElementById("panel-" + key)) {
+      showPanel(key);
+    }
+  }
+});
+window.addEventListener("hashchange", () => {
+  // Also respond to in-page hash changes (back/forward navigation).
+  const h = (window.location.hash || "").trim();
+  if (h.startsWith("#panel-")) {
+    showPanel(h.slice("#panel-".length));
+  }
+});
 loadRoleMappings();
 loadBuildingMap();
 loadNocSensors();
