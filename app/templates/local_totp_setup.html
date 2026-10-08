@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Set up 2-factor auth — Nexus</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #0d1117; color: #e6edf3; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 20px; }
+        .card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 40px; max-width: 480px; width: 100%; }
+        h1 { font-size: 20px; margin-bottom: 8px; }
+        p.sub { font-size: 13px; color: #8b949e; margin-bottom: 20px; }
+        ol { font-size: 13px; color: #c9d1d9; margin: 0 0 20px 20px; line-height: 1.7; }
+        ol li { padding-left: 4px; }
+        .qr { text-align: center; margin: 20px 0; }
+        .qr img { background: #fff; padding: 12px; border-radius: 8px; max-width: 220px; }
+        .secret { background: #0d1117; border: 1px solid #30363d; padding: 10px 14px; border-radius: 4px; font-family: ui-monospace, monospace; font-size: 13px; letter-spacing: 1px; margin-bottom: 20px; word-break: break-all; text-align: center; }
+        .secret small { display: block; font-family: inherit; color: #8b949e; font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 4px; }
+        label { display: block; font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; margin-top: 12px; }
+        input { width: 100%; padding: 9px 12px; background: #0d1117; border: 1px solid #30363d; color: #e6edf3; border-radius: 4px; font-size: 18px; font-family: ui-monospace, monospace; text-align: center; letter-spacing: 4px; }
+        input:focus { outline: none; border-color: #58a6ff; }
+        button { width: 100%; margin-top: 20px; padding: 10px; background: #1f6feb; color: #fff; font-size: 14px; font-weight: 600; border: none; border-radius: 6px; cursor: pointer; }
+        button:hover { background: #388bfd; }
+        .error { background: rgba(248, 81, 73, 0.1); border: 1px solid rgba(248, 81, 73, 0.35); color: #f85149; padding: 10px 14px; border-radius: 6px; font-size: 12px; margin-bottom: 16px; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>Set up 2-factor authentication</h1>
+        <p class="sub">Scan the QR with Google Authenticator, 1Password, Authy, Microsoft Authenticator, or any TOTP app, then enter the 6-digit code to confirm.</p>
+
+        {% if err %}
+        <div class="error">
+            {% if err == 'bad_code' %}That code didn't match. Try the next one.
+            {% elif err == 'no_secret' %}No TOTP secret on file — refresh the page.
+            {% else %}Error: {{ err }}{% endif %}
+        </div>
+        {% endif %}
+
+        <div class="qr"><img src="{{ qr_data_uri }}" alt="TOTP QR code"></div>
+
+        <div class="secret">
+            <small>Or enter manually</small>
+            {{ secret }}
+        </div>
+
+        <form method="POST" action="/auth/local/totp-setup">
+            <label for="code">6-digit code</label>
+            <input id="code" type="text" name="code" inputmode="numeric" pattern="[0-9 ]*" maxlength="7" autocomplete="one-time-code" required autofocus>
+            <button type="submit">Confirm</button>
+        </form>
+    </div>
+</body>
+</html>

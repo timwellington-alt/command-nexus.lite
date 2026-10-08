@@ -105,6 +105,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
         _CSRF_EXEMPT_FORM_POSTS = {
             "/auth/local/login",
             "/auth/local/change-password",
+            "/auth/local/totp-setup",
+            "/auth/local/totp-verify",
         }
         if request.method in ("POST", "PUT", "PATCH", "DELETE") and path not in _CSRF_EXEMPT_FORM_POSTS:
             if not self._check_csrf(request, settings):
@@ -123,20 +125,33 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 return JSONResponse({"detail": "Not authenticated"}, status_code=401)
             return RedirectResponse(url="/")
 
-        # ── Force password change for local-auth accounts marked
-        #    must_change_password (default admin bootstrap or admin reset).
-        #    Allow the change-password form itself + logout, redirect
-        #    everything else to the form.
+        # ── Mid-auth state gating for local-auth. Users land here
+        #    after a valid password but BEFORE finishing the forced
+        #    password change / TOTP setup / TOTP verify step. Confine
+        #    them to the auth flow until it's done.
         try:
-            if request.session.get("must_change_password"):
-                allowed = {"/auth/local/change-password", "/auth/local/logout"}
-                if path not in allowed and not path.startswith("/static/"):
+            must_change = bool(request.session.get("must_change_password"))
+            totp_pending = request.session.get("totp_pending")  # str or None
+            if must_change or totp_pending:
+                allowed_prefixes = (
+                    "/auth/local/change-password",
+                    "/auth/local/totp-setup",
+                    "/auth/local/totp-verify",
+                    "/auth/local/logout",
+                    "/static/",
+                )
+                if not any(path == p or path.startswith(p + "/") or path.startswith(p) for p in allowed_prefixes):
                     if path.startswith("/api/"):
                         return JSONResponse(
-                            {"detail": "Password change required"},
+                            {"detail": "Login not complete"},
                             status_code=403,
                         )
-                    return RedirectResponse(url="/auth/local/change-password")
+                    # Route to the right next step
+                    if must_change:
+                        return RedirectResponse(url="/auth/local/change-password")
+                    if totp_pending == "totp_verify":
+                        return RedirectResponse(url="/auth/local/totp-verify")
+                    return RedirectResponse(url="/auth/local/totp-setup")
         except Exception:
             pass
 

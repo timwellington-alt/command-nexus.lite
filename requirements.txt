@@ -37,6 +37,7 @@ pillow>=10.0
 reportlab>=4.0
 python-barcode>=0.15
 qrcode>=7.4
+pyotp>=2.9                       # local-auth TOTP (RFC 6238)
 opencv-python-headless>=4.9,<5   # face detection for ID card photo
 brother_ql>=0.9.4                # label printer (password-credential labels)
 

@@ -126,7 +126,7 @@ async def local_login(
 
     row = (await db.execute(text("""
         SELECT id, email, display_name, pw_hash, is_admin, active,
-               must_change_password
+               must_change_password, totp_secret, totp_verified_at
         FROM local_users
         WHERE lower(email) = :e
         LIMIT 1
@@ -197,6 +197,22 @@ async def local_login(
     settings = get_settings()
     import redis.asyncio as aioredis
     r = aioredis.from_url(settings.redis_url, decode_responses=True)
+    # Determine what step comes next:
+    #   must_change_password  → change-password form first
+    #   totp_verified_at None → TOTP enrollment
+    #   totp_verified_at set  → TOTP code prompt
+    # Session carries ``totp_pending`` to tell middleware this account
+    # isn't fully authenticated until the TOTP step completes.
+    if row["must_change_password"]:
+        next_step = "change_pw"
+        dest = "/auth/local/change-password"
+    elif row["totp_verified_at"] is None:
+        next_step = "totp_setup"
+        dest = "/auth/local/totp-setup"
+    else:
+        next_step = "totp_verify"
+        dest = "/auth/local/totp-verify"
+
     try:
         from app.auth.session_store import SESSION_TTL
         old = request.cookies.get(SESSION_COOKIE)
@@ -207,6 +223,9 @@ async def local_login(
                 "user_display_name": row["display_name"] or row["email"],
                 "auth_method": "local",
                 "must_change_password": bool(row["must_change_password"]),
+                # Set until TOTP step completes. Middleware denies
+                # access to protected routes while this is truthy.
+                "totp_pending": next_step,
             },
             secret_key=settings.app_secret_key,
             max_age=int(SESSION_TTL.total_seconds()),
@@ -214,11 +233,6 @@ async def local_login(
     finally:
         await r.aclose()
 
-    # If this account must change its password (default-admin bootstrap
-    # or admin-triggered reset), land on the change page instead of
-    # dashboard. Middleware allows that specific path for authenticated
-    # users with the flag set.
-    dest = "/auth/local/change-password" if row["must_change_password"] else "/dashboard"
     resp = RedirectResponse(url=dest, status_code=303)
 
     # Secure flag follows the request scheme, not APP_ENV. Setting
@@ -289,10 +303,174 @@ async def local_change_password(
         module="auth", target=email,
         ip_address=request.client.host if request.client else None,
     )
+    # Did this account already enroll TOTP? If yes, we're done with
+    # the mid-login dance; drop them at the TOTP code prompt. If no,
+    # route through enrollment first.
+    totp_row = (await db.execute(text(
+        "SELECT totp_verified_at FROM local_users WHERE id = :id"
+    ).bindparams(id=row["id"]))).first()
     await db.commit()
-    # Clear the session flag so middleware stops redirecting back here
+    # Clear the must-change flag; preserve totp_pending so middleware
+    # keeps the user on the auth flow until TOTP finishes.
     try:
         request.session.pop("must_change_password", None)
+        request.session["totp_pending"] = (
+            "totp_verify" if totp_row and totp_row[0] else "totp_setup"
+        )
+    except Exception:
+        pass
+    dest = "/auth/local/totp-verify" if totp_row and totp_row[0] else "/auth/local/totp-setup"
+    return RedirectResponse(url=dest, status_code=303)
+
+
+# ── TOTP enrollment + verification ──────────────────────────────────
+
+def _totp_issuer() -> str:
+    try:
+        from app.config import get_settings as _gs
+        name = (_gs().domain or "").strip() or "Command Nexus"
+        if name in {"nexus.yourdistrict.org", "example.com", "localhost"}:
+            return "Command Nexus"
+        return f"Nexus @ {name}"
+    except Exception:
+        return "Command Nexus"
+
+
+def _generate_qr_data_uri(provisioning_uri: str) -> str:
+    """Return a data: URL rendering `provisioning_uri` as a QR code PNG."""
+    import io, base64
+    import qrcode
+    img = qrcode.make(provisioning_uri)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+
+
+@router.get("/totp-setup", response_class=HTMLResponse)
+async def totp_setup_form(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Show the QR code + secret for first-time TOTP enrollment."""
+    import pyotp
+    email = request.session.get("user_email")
+    if not email or request.session.get("auth_method") != "local":
+        return RedirectResponse(url="/", status_code=303)
+    pending = request.session.get("totp_pending")
+    if pending not in ("totp_setup", None):
+        return RedirectResponse(url="/auth/local/totp-verify", status_code=303)
+
+    # Generate a fresh secret and store it unverified. Operator can
+    # revisit the setup page — each visit rolls the secret until a
+    # valid code lands via POST.
+    secret = pyotp.random_base32()
+    await db.execute(text("""
+        UPDATE local_users
+        SET totp_secret = :s, totp_verified_at = NULL
+        WHERE lower(email) = lower(:e)
+    """).bindparams(s=secret, e=email))
+    await db.commit()
+
+    uri = pyotp.TOTP(secret).provisioning_uri(name=email, issuer_name=_totp_issuer())
+    return templates.TemplateResponse("local_totp_setup.html", {
+        "request": request,
+        "secret": secret,
+        "qr_data_uri": _generate_qr_data_uri(uri),
+        "email": email,
+        "err": request.query_params.get("err"),
+    })
+
+
+@router.post("/totp-setup")
+async def totp_setup_submit(
+    request: Request,
+    code: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+):
+    import pyotp
+    email = request.session.get("user_email")
+    if not email or request.session.get("auth_method") != "local":
+        return RedirectResponse(url="/", status_code=303)
+
+    row = (await db.execute(text(
+        "SELECT totp_secret FROM local_users WHERE lower(email) = lower(:e)"
+    ).bindparams(e=email))).first()
+    if not row or not row[0]:
+        return RedirectResponse(url="/auth/local/totp-setup?err=no_secret", status_code=303)
+
+    cleaned = (code or "").replace(" ", "").strip()
+    if not pyotp.TOTP(row[0]).verify(cleaned, valid_window=1):
+        return RedirectResponse(url="/auth/local/totp-setup?err=bad_code", status_code=303)
+
+    await db.execute(text("""
+        UPDATE local_users SET totp_verified_at = NOW()
+        WHERE lower(email) = lower(:e)
+    """).bindparams(e=email))
+    await log_action(
+        db, actor=email, action="auth.local.totp_enrolled",
+        module="auth", target=email,
+        ip_address=request.client.host if request.client else None,
+    )
+    await db.commit()
+    try:
+        request.session.pop("totp_pending", None)
+    except Exception:
+        pass
+    return RedirectResponse(url="/dashboard", status_code=303)
+
+
+@router.get("/totp-verify", response_class=HTMLResponse)
+async def totp_verify_form(request: Request):
+    """Prompt the current 6-digit code on subsequent logins."""
+    email = request.session.get("user_email")
+    if not email or request.session.get("auth_method") != "local":
+        return RedirectResponse(url="/", status_code=303)
+    return templates.TemplateResponse("local_totp_verify.html", {
+        "request": request,
+        "err": request.query_params.get("err"),
+    })
+
+
+@router.post("/totp-verify")
+async def totp_verify_submit(
+    request: Request,
+    code: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+):
+    import pyotp
+    email = request.session.get("user_email")
+    if not email or request.session.get("auth_method") != "local":
+        return RedirectResponse(url="/", status_code=303)
+
+    row = (await db.execute(text(
+        "SELECT totp_secret, totp_verified_at FROM local_users "
+        "WHERE lower(email) = lower(:e)"
+    ).bindparams(e=email))).first()
+    if not row or not row[0] or not row[1]:
+        # Shouldn't happen — operator reached verify without enrollment.
+        return RedirectResponse(url="/auth/local/totp-setup", status_code=303)
+
+    cleaned = (code or "").replace(" ", "").strip()
+    if not pyotp.TOTP(row[0]).verify(cleaned, valid_window=1):
+        count = await _bump_failures(email)
+        logger.warning("local_totp_verify: bad code for %s (count=%d)", email, count)
+        await log_action(
+            db, actor=email, action="auth.local.totp_fail",
+            module="auth", target=email,
+            ip_address=request.client.host if request.client else None,
+        )
+        await db.commit()
+        return RedirectResponse(url="/auth/local/totp-verify?err=bad_code", status_code=303)
+
+    await _clear_failures(email)
+    await log_action(
+        db, actor=email, action="auth.local.totp_ok",
+        module="auth", target=email,
+        ip_address=request.client.host if request.client else None,
+    )
+    await db.commit()
+    try:
+        request.session.pop("totp_pending", None)
     except Exception:
         pass
     return RedirectResponse(url="/dashboard", status_code=303)
