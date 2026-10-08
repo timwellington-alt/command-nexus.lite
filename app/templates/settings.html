@@ -1159,6 +1159,15 @@ function renderPanels(groups, settings) {
       if (key === 'hr_sheets' && f.key === 'buildings') {
         return `<div class="field" style="flex-direction:column;align-items:stretch">
           <label style="margin-bottom:8px">Per-Building Staff Directory Sheets</label>
+          <div style="padding:10px 12px;background:rgba(88,166,255,0.08);border:1px solid rgba(88,166,255,0.3);border-radius:6px;margin-bottom:12px;font-size:12px;line-height:1.5;color:var(--text)">
+            <strong>Need a starting point?</strong>
+            <a href="/settings/staff-template.xlsx" download style="color:var(--accent);font-weight:600">
+              ⬇ Download the Staff Directory template (.xlsx)
+            </a>
+            — one copy per building. Upload each to Drive, open as a Sheet,
+            share with your service account (Viewer), then <strong>+ Add Building</strong>
+            below with the Sheet ID.
+          </div>
           <div id="hr-sheets-builder" style="width:100%"></div>
           <button class="tag-add-btn" style="align-self:flex-start;margin-top:8px" data-action="add-hr-sheet-entry">+ Add Building</button>
           <input type="hidden" class="setting-input" data-integration="${key}" data-key="${f.key}" data-secret="false" data-masked="false" id="hr-sheets-hidden" value='${(v || "").replace(/'/g,"&apos;")}'>
