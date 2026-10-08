@@ -824,10 +824,15 @@ function renderSidebar(groups) {
     if (!categories[cat]) categories[cat] = [];
     categories[cat].push({key, label: g.label});
   }
-  const order = ['General', 'Staff', 'Students', 'Roster', 'Access', 'External APIs'];
+  const order = ['General', 'Staff', 'Students', 'Access', 'External APIs'];
   const extras = {
     'Staff': [{key: 'profiles', label: 'Provisioning Profiles'}],
-    'Roster': [{key: 'student_ou_map', label: 'Student OU Map'}, {key: 'student_membership', label: 'Student Membership Codes'}, {key: 'attendance_recipients', label: 'Attendance Report Recipients', linkTo: '/settings/attendance-recipients'}, {key: 'clever_custom_sections_dash', label: 'Clever Custom Sections — Dashboard', linkTo: '/settings/clever-custom-sections'}],
+    'Students': [
+      {key: 'student_ou_map', label: 'Student OU Map'},
+      {key: 'student_membership', label: 'Student Membership Codes'},
+      {key: 'attendance_recipients', label: 'Attendance Report Recipients', linkTo: '/settings/attendance-recipients'},
+      {key: 'clever_custom_sections_dash', label: 'Clever Custom Sections — Dashboard', linkTo: '/settings/clever-custom-sections'},
+    ],
     'General': [{key: 'building_map', label: 'School → Building Map'}],
     'Access': [
       {key: 'user_access', label: 'User Access'},

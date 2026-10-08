@@ -297,7 +297,7 @@ _SETTING_GROUPS_FULL = {
     },
     "clever_custom_sections": {
         "label": "Clever Custom Sections",
-        "category": "Roster",
+        "category": "Students",
         "fields": [
             ("sftp_host", "SFTP host (e.g. sftp.clever.com — same server as the SIS import)", False),
             ("sftp_port", "SFTP port (default 22)", False),
