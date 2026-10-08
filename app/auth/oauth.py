@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 import httpx
 from fastapi import APIRouter, Request, Depends
 from fastapi.responses import RedirectResponse
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -241,12 +241,36 @@ async def callback(
     except Exception as e:
         logger.warning(f"on-behalf-of ticket backfill failed for {email}: {e}")
 
-    # Sync roles from Google Group membership
-    assigned_roles = await sync_user_roles(db, user)
+    # Nexus-lite doesn't sync roles from Google Groups — too much
+    # Workspace config to maintain for a shareable template. Instead
+    # new users land with a default 'viewer' role; an admin promotes
+    # them from Settings → User Access.
+    #
+    # Existing users keep whatever roles are in user_roles (set manually
+    # via the UI). This path only auto-seeds the viewer role on first
+    # login, never overrides later changes.
+    _existing = (await db.execute(
+        text("SELECT COUNT(*) FROM user_roles WHERE user_id = :u"),
+        {"u": user.id},
+    )).scalar_one()
+    if _existing == 0:
+        _viewer = (await db.execute(
+            text("SELECT id FROM roles WHERE name = 'viewer'"),
+        )).first()
+        if _viewer:
+            await db.execute(text("""
+                INSERT INTO user_roles (user_id, role_id, scope_type, scope_value, assigned_by, created_at)
+                VALUES (:u, :r, 'district', '*', 'system:oauth_first_login', NOW())
+                ON CONFLICT DO NOTHING
+            """).bindparams(u=user.id, r=_viewer[0]))
 
-    if not assigned_roles:
-        logger.warning(f"Login denied — no group membership: {email}")
-        return RedirectResponse(url="/?error=no_access")
+    # Reload role assignments for the session snapshot below.
+    _rr = (await db.execute(text("""
+        SELECT r.name FROM user_roles ur
+        JOIN roles r ON r.id = ur.role_id
+        WHERE ur.user_id = :u
+    """).bindparams(u=user.id))).all()
+    assigned_roles = [{"role_name": r[0]} for r in _rr]
 
     # Fetch the user's Google Group memberships and store them in the
     # session. This is the single source of truth for cross-app

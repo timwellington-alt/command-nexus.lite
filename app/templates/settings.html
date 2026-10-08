@@ -740,6 +740,18 @@
     </div>
     {% endif %}
 
+    <!-- User Access panel — direct per-user role assignment -->
+    <div class="module-panel" id="panel-user_access">
+      <div class="panel-header">
+        <span class="panel-title">User Access</span>
+      </div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:16px">
+        Grant or revoke roles for each authenticated user. Local-auth users with the admin flag are auto-assigned the admin role on login; everyone else starts with no roles until promoted here.
+      </p>
+      <div id="ua-msg" style="font-size:12px;margin-bottom:10px"></div>
+      <div id="ua-list"></div>
+    </div>
+
   </div>
 </div>
 {% endblock %}
@@ -770,6 +782,9 @@ function showPanel(key) {
   }
   if (key === 'local_accounts') {
     laLoad();
+  }
+  if (key === 'user_access') {
+    uaLoad();
   }
   // Alerts panel: load recipients, buildings, VAPID key, cast targets
   if (key === 'alerts') {
@@ -815,9 +830,10 @@ function renderSidebar(groups) {
     'Roster': [{key: 'student_ou_map', label: 'Student OU Map'}, {key: 'student_membership', label: 'Student Membership Codes'}, {key: 'attendance_recipients', label: 'Attendance Report Recipients', linkTo: '/settings/attendance-recipients'}, {key: 'clever_custom_sections_dash', label: 'Clever Custom Sections — Dashboard', linkTo: '/settings/clever-custom-sections'}],
     'General': [{key: 'building_map', label: 'School → Building Map'}],
     'Alerts': [{key: 'alerts', label: 'Alert Routing'}],
-    {% if local_auth_enabled %}
-    'Access': [{key: 'local_accounts', label: 'Local Accounts'}],
-    {% endif %}
+    'Access': [
+      {key: 'user_access', label: 'User Access'},
+      {% if local_auth_enabled %}{key: 'local_accounts', label: 'Local Accounts'},{% endif %}
+    ],
   };
   // A category is worth rendering if it has API groups OR extras entries
   // (previously extras-only sections like Roster + Alerts silently
@@ -893,7 +909,7 @@ function renderPanels(groups, settings) {
   const container = document.getElementById('panels-container');
   // Build a panel for each integration group
   // Keys that have static HTML panels — skip dynamic rendering
-  const STATIC_PANELS = new Set(['role_sync', 'profiles', 'hr_smb_tabs', 'building_map', 'student_ou_map', 'bell_schedules', 'homeroom_periods', 'noc_sensors', 'infra_tools', 'alerts', 'halo_recipients', 'student_membership', 'local_accounts']);
+  const STATIC_PANELS = new Set(['role_sync', 'profiles', 'hr_smb_tabs', 'building_map', 'student_ou_map', 'bell_schedules', 'homeroom_periods', 'noc_sensors', 'infra_tools', 'alerts', 'halo_recipients', 'student_membership', 'local_accounts', 'user_access']);
   let html = '';
   for (const [key, g] of Object.entries(groups)) {
     if (STATIC_PANELS.has(key)) continue;
@@ -4007,6 +4023,86 @@ loadIntegrationMetadata();
 loadTabConfigs();
 
 // ── Local Accounts panel (only visible when LOCAL_AUTH_ENABLED) ──
+let _ua_roles_cache = null;
+
+async function uaLoad() {
+  const listEl = document.getElementById('ua-list');
+  const msgEl = document.getElementById('ua-msg');
+  if (!listEl) return;
+  listEl.innerHTML = '<p style="color:var(--muted);font-size:12px">Loading…</p>';
+  if (msgEl) msgEl.textContent = '';
+  try {
+    const [uR, rR] = await Promise.all([
+      fetch('/api/settings/users', {headers:{'X-Requested-With':'CommandNexus'}}),
+      fetch('/api/settings/roles', {headers:{'X-Requested-With':'CommandNexus'}}),
+    ]);
+    if (!uR.ok || !rR.ok) throw new Error('HTTP ' + uR.status + '/' + rR.status);
+    const users = (await uR.json()).users || [];
+    _ua_roles_cache = (await rR.json()).roles || [];
+    if (!users.length) {
+      listEl.innerHTML = '<p style="color:var(--muted);font-size:12px">No users yet.</p>';
+      return;
+    }
+    listEl.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="text-align:left;border-bottom:1px solid var(--border)">
+        <th style="padding:6px 8px">Email</th>
+        <th style="padding:6px 8px">Name</th>
+        <th style="padding:6px 8px">Last login</th>
+        <th style="padding:6px 8px">Roles</th>
+      </tr></thead>
+      <tbody>${users.map(u => uaRow(u)).join('')}</tbody>
+    </table>`;
+    listEl.querySelectorAll('[data-ua-user]').forEach(el => {
+      el.addEventListener('change', () => uaSave(Number(el.dataset.uaUser)));
+    });
+  } catch (e) {
+    listEl.innerHTML = `<p style="color:var(--red);font-size:12px">Error loading: ${e.message}</p>`;
+  }
+}
+
+function uaRow(u) {
+  const last = u.last_login ? new Date(u.last_login).toLocaleDateString() : '—';
+  const assigned = new Set((u.roles || []).map(r => r.role_id));
+  const chips = _ua_roles_cache.map(r =>
+    `<label style="display:inline-flex;align-items:center;gap:4px;margin-right:10px;font-size:11px">
+       <input type="checkbox" data-ua-user="${u.id}" data-ua-role="${r.id}" ${assigned.has(r.id) ? 'checked' : ''}>
+       ${r.name}
+     </label>`
+  ).join('');
+  const inactive = u.is_active ? '' : ' <span style="color:var(--muted);font-size:10px">(inactive)</span>';
+  return `<tr style="border-bottom:1px solid var(--border)">
+    <td style="padding:6px 8px"><code>${u.email}</code>${inactive}</td>
+    <td style="padding:6px 8px">${u.name || '—'}</td>
+    <td style="padding:6px 8px;color:var(--muted)">${last}</td>
+    <td style="padding:6px 8px">${chips}</td>
+  </tr>`;
+}
+
+async function uaSave(userId) {
+  const msgEl = document.getElementById('ua-msg');
+  const checked = Array.from(document.querySelectorAll(`[data-ua-user="${userId}"]:checked`))
+    .map(el => Number(el.dataset.uaRole));
+  try {
+    const r = await fetch(`/api/settings/users/${userId}/roles`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json', 'X-Requested-With':'CommandNexus'},
+      body: JSON.stringify({role_ids: checked}),
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    if (msgEl) {
+      msgEl.textContent = 'Saved';
+      msgEl.style.color = 'var(--green)';
+      setTimeout(() => { msgEl.textContent = ''; }, 2500);
+    }
+  } catch (e) {
+    if (msgEl) {
+      msgEl.textContent = 'Save failed: ' + e.message;
+      msgEl.style.color = 'var(--red)';
+    }
+  }
+}
+
+
 async function laLoad() {
   const listEl = document.getElementById('la-list');
   if (!listEl) return;

@@ -41,13 +41,16 @@ templates = Jinja2Templates(directory="app/templates")
 LITE_KEPT_KEYS = {
     "branding",                 # District name / colors / building map
     "google",                   # Workspace OAuth + API creds
-    "role_sync",                # Google-group → Nexus-role mapping
     "hr_sheets",                # HR staff directory (single Google Sheet)
     "room_roster",              # Staff → room assignments
     "staff",                    # Staff provisioning rules
     "roster",                   # SIS CSV import settings
     "guidance",                 # Guidance queue scheduling
     "clever_custom_sections",   # Custom sections sync
+    # role_sync (Google-group → role mapping) deliberately stripped.
+    # Lite uses direct admin-assigned roles via the Access → User Access
+    # panel; receiving districts don't need to maintain Google Groups
+    # to get Nexus role assignment working.
 }
 
 # Setting definitions per integration: (key, label, is_secret_ref)
@@ -1591,3 +1594,105 @@ async def setting_groups(
         ]}
         for k, v in SETTING_GROUPS.items()
     }
+
+
+# ── User Access — direct per-user role assignment ───────────────────
+# Replaces the Google-Groups → role mapping flow for the lite template.
+# Admins pick a user, pick role(s), done. Local-auth users get admin
+# auto-assigned via the local login path (app/auth/local.py); OAuth
+# users get 'viewer' on first login and are promoted here.
+
+@router.get("/api/settings/users")
+async def list_users(
+    user: User = Depends(require_action("settings.manage")),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all authenticated users (OAuth + local) with their current
+    role assignments. Powers the User Access panel."""
+    from sqlalchemy import text as _text
+    rows = (await db.execute(_text("""
+        SELECT u.id, u.email, u.name, u.is_active, u.last_login,
+               COALESCE(
+                 json_agg(json_build_object(
+                   'role_id', r.id,
+                   'role_name', r.name,
+                   'scope_type', ur.scope_type,
+                   'scope_value', ur.scope_value
+                 )) FILTER (WHERE r.id IS NOT NULL),
+                 '[]'::json
+               ) AS roles
+        FROM users u
+        LEFT JOIN user_roles ur ON ur.user_id = u.id
+        LEFT JOIN roles r ON r.id = ur.role_id
+        GROUP BY u.id, u.email, u.name, u.is_active, u.last_login
+        ORDER BY lower(u.email)
+    """))).mappings().all()
+    return {"users": [dict(r) for r in rows]}
+
+
+@router.get("/api/settings/roles")
+async def list_roles(
+    user: User = Depends(require_action("settings.manage")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Enumerate seeded roles — the dropdown source for role assignment."""
+    from sqlalchemy import text as _text
+    rows = (await db.execute(_text(
+        "SELECT id, name, description FROM roles ORDER BY name"
+    ))).mappings().all()
+    return {"roles": [dict(r) for r in rows]}
+
+
+@router.post("/api/settings/users/{user_id}/roles")
+async def set_user_roles(
+    user_id: int,
+    request: Request,
+    user: User = Depends(require_action("settings.manage")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Replace a user's role assignments with the posted list.
+
+    Body: {"role_ids": [1, 3]}  — array of role IDs. Empty array
+    revokes all roles. Each role is assigned at ('district', '*')
+    scope; scoped-role management is a future feature if needed.
+    """
+    from sqlalchemy import text as _text
+    body = await request.json()
+    role_ids = body.get("role_ids")
+    if not isinstance(role_ids, list):
+        raise HTTPException(status_code=400, detail="role_ids must be a list")
+
+    # Validate — all IDs must exist
+    if role_ids:
+        existing = (await db.execute(_text(
+            "SELECT id FROM roles WHERE id = ANY(:ids)"
+        ).bindparams(ids=[int(r) for r in role_ids]))).scalars().all()
+        if len(existing) != len(set(role_ids)):
+            raise HTTPException(status_code=400, detail="One or more role_ids invalid")
+
+    # Target user must exist
+    target = (await db.execute(_text(
+        "SELECT id, email FROM users WHERE id = :u"
+    ).bindparams(u=user_id))).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Replace: delete + insert in one transaction
+    await db.execute(_text(
+        "DELETE FROM user_roles WHERE user_id = :u"
+    ).bindparams(u=user_id))
+    for rid in role_ids:
+        await db.execute(_text("""
+            INSERT INTO user_roles (user_id, role_id, scope_type, scope_value, assigned_by, created_at)
+            VALUES (:u, :r, 'district', '*', :by, NOW())
+            ON CONFLICT DO NOTHING
+        """).bindparams(u=user_id, r=int(rid), by=user.email))
+
+    await log_action(
+        db, actor=user.email, action="settings.user_access.set_roles",
+        module="settings",
+        target=f"{target[1]} roles={sorted(role_ids)}",
+        ip_address=request.client.host if request.client else None,
+    )
+    await db.commit()
+    return {"status": "ok"}
