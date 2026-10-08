@@ -1328,6 +1328,26 @@ function renderPanels(groups, settings) {
         </div>`;
       }
 
+      // Three-state dropdown for the student provisioning pipeline.
+      // Collapses the old enable+writes pair into one explicit mode.
+      if (f.key === 'student_provisioning_mode') {
+        const current = (v || 'off').toLowerCase();
+        const opts = [
+          ['off', 'Off — just import the roster, no account actions'],
+          ['review', 'Review — queue changes for an admin to click Provision'],
+          ['autopilot', 'Autopilot — Nexus writes to Google automatically'],
+        ].map(([val, lbl]) =>
+          `<option value="${val}" ${current === val ? 'selected' : ''}>${lbl}</option>`
+        ).join('');
+        return `<div class="field" style="flex-direction:column;align-items:stretch">
+          <label>${f.label}</label>
+          <select class="setting-input" data-integration="${key}" data-key="${f.key}" data-secret="false" data-masked="false"
+            style="width:100%;max-width:520px;padding:6px 10px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:4px;font-size:13px">
+            ${opts}
+          </select>
+        </div>`;
+      }
+
       // Textarea for message templates (subject/body)
       if (f.key.endsWith('_body') || f.key.endsWith('_subject')) {
         const rows = f.key.endsWith('_body') ? 6 : 1;

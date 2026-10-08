@@ -80,8 +80,16 @@ async def _get_provisioning_settings(db: AsyncSession) -> dict | None:
     """
     from app.modules.settings.repository import get_setting_value
 
-    writes_enabled = (await get_setting_value(db, "roster", "student_google_writes_enabled") or "").lower()
-    if writes_enabled != "true":
+    # Autopilot requires the single-mode setting = 'autopilot'. Legacy
+    # fallback honors the old (provisioning_enabled, google_writes_enabled)
+    # pair so a mid-upgrade deploy doesn't go silent.
+    mode = (await get_setting_value(db, "roster", "student_provisioning_mode") or "").lower()
+    if not mode:
+        legacy_prov = (await get_setting_value(db, "roster", "student_provisioning_enabled") or "").lower()
+        legacy_writes = (await get_setting_value(db, "roster", "student_google_writes_enabled") or "").lower()
+        if legacy_prov == "true" and legacy_writes == "true":
+            mode = "autopilot"
+    if mode != "autopilot":
         return None
 
     student_domain = await get_setting_value(db, "google", "student_domain") or ""

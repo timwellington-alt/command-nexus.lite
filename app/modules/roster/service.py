@@ -218,13 +218,25 @@ async def provision_student_account(
     from app.modules.roster.clever_service import build_expected_email, expected_grad_year
     from app.integrations.google.adapter import GoogleWorkspaceAdapter
 
-    # ── Check toggles ──
-    prov_enabled = (await get_setting_value(db, "roster", "student_provisioning_enabled") or "").lower()
-    writes_enabled = (await get_setting_value(db, "roster", "student_google_writes_enabled") or "").lower()
-    if prov_enabled != "true":
-        return {"status": "skipped", "detail": "Student provisioning is disabled"}
-    if writes_enabled != "true":
-        return {"status": "skipped", "detail": "Google writes for students are disabled"}
+    # ── Check mode ──
+    # Single setting replaces the old (provisioning_enabled, google_writes_enabled)
+    # pair. Legacy fallback: if mode is unset AND either legacy switch exists,
+    # resolve from the pair so an upgrade mid-flight doesn't flip the deploy
+    # from Autopilot to Off silently.
+    mode = (await get_setting_value(db, "roster", "student_provisioning_mode") or "").lower()
+    if not mode:
+        legacy_prov = (await get_setting_value(db, "roster", "student_provisioning_enabled") or "").lower()
+        legacy_writes = (await get_setting_value(db, "roster", "student_google_writes_enabled") or "").lower()
+        if legacy_prov == "true" and legacy_writes == "true":
+            mode = "autopilot"
+        elif legacy_prov == "true":
+            mode = "review"
+        else:
+            mode = "off"
+    if mode == "off":
+        return {"status": "skipped", "detail": "Account provisioning mode is Off"}
+    if mode == "review":
+        return {"status": "skipped", "detail": "Account provisioning mode is Review — queued for manual approval"}
 
     student = await repo.get_student_by_id(db, student_id)
     if not student:

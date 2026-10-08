@@ -198,18 +198,11 @@ _SETTING_GROUPS_FULL = {
                 "Google Workspace OU where accounts get moved when a student is withdrawn. Must already exist in Admin Console. Example: /Archived Accounts",
             ),
             (
-                "student_provisioning_enabled",
-                "Enable student account provisioning",
+                "student_provisioning_mode",
+                "Account provisioning mode",
                 False,
                 False,
-                "Master switch for the student pipeline. OFF = Nexus imports the roster but takes NO account actions. ON = Nexus stages account work (create / suspend / archive) in the guidance queue. Actual writes to Google still require the next switch.",
-            ),
-            (
-                "student_google_writes_enabled",
-                "Push changes to Google automatically",
-                False,
-                False,
-                "When ON, Nexus writes account changes to Google Workspace on its own schedule. When OFF, changes queue up for an admin to review + click Provision. Keep OFF until you have watched the queue for a few days and trust what it is proposing.",
+                "Three states — <strong>Off</strong>: Nexus imports the roster for /roster but takes no account actions. <strong>Review</strong>: Nexus analyzes each student against Google Workspace, builds a pending-change queue, admin clicks Provision on each entry. <strong>Autopilot</strong>: Nexus writes changes to Google on its own schedule, no manual review. Standard rollout: start in Review for a few days, flip to Autopilot once you trust what the queue is proposing.",
             ),
             (
                 "withdraw_cascade_floor",
