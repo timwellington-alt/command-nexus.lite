@@ -8,8 +8,8 @@ Integration health checks via T6.3.
 
 import logging
 
-from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -118,8 +118,13 @@ _SETTING_GROUPS_FULL = {
         "label": "HR Google Sheets",
         "category": "Staff",
         "fields": [
-            ("hr_sheet_id", "HR Master Sheet ID", False),
-            ("coaches_sheet_id", "Coaches Sheet ID", False),
+            ("hr_sheet_id", "HR Master Sheet ID", False, False,
+             "Google Sheet ID (the XXXX in /spreadsheets/d/XXXX/edit). "
+             "Need a starting point? "
+             "<a href=\"/settings/staff-template.xlsx\" download>"
+             "Download the Staff Directory template (.xlsx)</a>, upload "
+             "it to Drive, open with Sheets, share with your service "
+             "account, then paste the Sheet ID here."),
         ],
     },
     "room_roster": {
@@ -766,6 +771,31 @@ _SETTING_GROUPS_FULL = {
 # Filter down to the integrations shipped in lite. Add to LITE_KEPT_KEYS
 # above to re-enable a group.
 SETTING_GROUPS = {k: v for k, v in _SETTING_GROUPS_FULL.items() if k in LITE_KEPT_KEYS}
+
+
+@router.get("/settings/staff-template.xlsx")
+async def download_staff_template(
+    user: User = Depends(require_action("settings.manage")),
+):
+    """Serve the ready-to-fill Staff Directory + Phone Directory xlsx.
+
+    Operator workflow: Settings → HR Google Sheets → Download template
+    → upload to Drive → convert to Sheet → share with service account
+    → paste Sheet ID into Nexus Settings. The hr_sync worker then polls
+    the sheet on schedule.
+
+    Admin-only (same gate as the Settings page itself) — the template
+    has no sensitive content but the surface should match whoever can
+    see the HR data source config."""
+    import os as _os
+    path = _os.path.join("docs", "templates", "staff_directory_template.xlsx")
+    if not _os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="Template not found")
+    return FileResponse(
+        path,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename="staff_directory_template.xlsx",
+    )
 
 
 @router.get("/settings", response_class=HTMLResponse)
