@@ -310,10 +310,7 @@
   <div class="health-bar" id="health-cards">
     <span style="font-size:11px;color:var(--text-muted)">Sources:</span>
     <div class="health-item"><div class="health-dot health-pending" id="health-google-dot"></div><span id="health-google-msg">Google</span></div>
-    <div class="health-item"><div class="health-dot health-pending" id="health-ad-dot"></div><span id="health-ad-msg">AD</span></div>
-    <div class="health-item"><div class="health-dot health-pending" id="health-paxton-dot"></div><span id="health-paxton-msg">Paxton</span></div>
     <div class="health-item"><div class="health-dot health-pending" id="health-hr-sheet-dot"></div><span id="health-hr-sheet-msg">HR</span></div>
-    <div class="health-item"><div class="health-dot health-pending" id="health-ucm-dot"></div><span id="health-ucm-msg">UCM</span></div>
   </div>
   {% endif %}
 
@@ -802,11 +799,8 @@ function attrEsc(s) {
 // ── Health checks (v2: individual /api/settings/test/{system} calls) ──
 async function loadHealth() {
     const systems = [
-        {name: 'ad',       dotId: 'health-ad-dot',        msgId: 'health-ad-msg'},
-        {name: 'paxton',   dotId: 'health-paxton-dot',    msgId: 'health-paxton-msg'},
-        {name: 'google',   dotId: 'health-google-dot',    msgId: 'health-google-msg'},
-        {name: 'hr_sheets',    dotId: 'health-hr-sheet-dot',   msgId: 'health-hr-sheet-msg'},
-        {name: 'grandstream', dotId: 'health-ucm-dot',        msgId: 'health-ucm-msg'},
+        {name: 'google',    dotId: 'health-google-dot',   msgId: 'health-google-msg'},
+        {name: 'hr_sheets', dotId: 'health-hr-sheet-dot', msgId: 'health-hr-sheet-msg'},
     ];
     for (const sys of systems) {
         const dotEl = document.getElementById(sys.dotId);
