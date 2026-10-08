@@ -815,15 +815,9 @@ async def _process_csv(db, csv_text: str, import_type: str, subject: str) -> tup
         and "AbsenceType2" in header_set
     )
     if import_type == "attendance" or is_absence_shape:
-        from app.modules.roster.absence_service import (
-            parse_absence_csv, upsert_absences,
-        )
-        rows = parse_absence_csv(csv_text)
-        r = await upsert_absences(db, rows, source_message_id=None)
-        logger.info(
-            f"Absence CSV '{subject}': parsed={r['total']} "
-            f"upserted={r['inserted_or_updated']} skipped={r['skipped']}"
-        )
+        # Attendance ingest stripped in lite — the absence_service module
+        # is gone. Just acknowledge + drop the CSV.
+        logger.info(f"Absence CSV '{subject}' skipped — attendance module not in lite")
         return None, None, None, None, None
 
     # Use clever_service's type detection for more accurate classification

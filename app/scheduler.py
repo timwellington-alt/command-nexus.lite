@@ -23,11 +23,8 @@ SCHEDULES = [
     ("expire_stale_onboarding_tokens", 3600, "Expire onboarding tokens past their TTL — hourly"),
     ("run_staff_reconciliation", 3600, "Rebuild staff_reconciliation from staff_directory + HR — hourly"),
     ("check_job_liveness", 900, "Alert if any scheduled job goes stale — every 15 min"),
-    ("poll_clever_imports", 900, "Poll Gmail for MetaSolutions CSV exports (roster + attendance) — every 15 min"),
+    ("poll_clever_imports", 900, "Poll Gmail for MetaSolutions CSV exports (roster) — every 15 min"),
     ("reconcile_student_google_state", 86400, "Reconcile Google student OU membership vs. roster — daily"),
-    ("snapshot_attendance_analytics", 86400, "Nightly attendance rollup: chronic flag + spike alert"),
-    ("send_attendance_daily_reports", 900, "Send per-building attendance digest emails; internal weekday+HH:MM gate"),
-    ("sync_clever_custom_sections", 86400, "Nightly Clever custom-sections sync from intervention Google Sheet"),
 ]
 
 

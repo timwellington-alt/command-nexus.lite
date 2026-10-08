@@ -18,9 +18,6 @@ from app.workers.hr_sync_job import sync_hr_data
 from app.workers.onboarding_token_expire_job import expire_stale_onboarding_tokens
 from app.workers.job_liveness_job import check_job_liveness
 from app.workers.staff_reconciliation_job import run_staff_reconciliation
-from app.workers.attendance_analytics_job import snapshot_attendance_analytics
-from app.workers.attendance_reports_job import send_attendance_daily_reports
-from app.workers.clever_custom_sections_job import sync_clever_custom_sections
 from app.workers.clever_import_job import poll_clever_imports
 
 from arq import func as _arq_func
@@ -140,9 +137,6 @@ class WorkerSettings:
         run_staff_reconciliation,
         expire_stale_onboarding_tokens,
         check_job_liveness,
-        snapshot_attendance_analytics,
-        send_attendance_daily_reports,
-        sync_clever_custom_sections,
     ]] + [
         poll_clever_imports_job,
         reconcile_student_google_state_job,

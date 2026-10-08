@@ -182,12 +182,10 @@ def _register_routers(app: FastAPI):
     from app.modules.roster.exports_router import router as roster_exports_router
     app.include_router(roster_exports_router)
 
-    from app.modules.roster.analytics_router import router as roster_analytics_router
-    app.include_router(roster_analytics_router)
-
-    from app.modules.roster.custom_sections_router import router as custom_sections_router
-    app.include_router(custom_sections_router)
-
+    # Attendance analytics + Clever custom sections routers stripped
+    # in lite — those features (per-student absence tracking, chronic
+    # flag, intervention sheet sync) are district-specific and not
+    # part of the shareable scope.
     # alerts UI CRUD stripped in the lite build — dispatch still lives
     # in app.modules.alerts.service (called from worker_watchdog etc.).
 

@@ -46,7 +46,7 @@ LITE_KEPT_KEYS = {
     "staff",                    # Staff provisioning rules
     "roster",                   # SIS CSV import settings
     "guidance",                 # Guidance queue scheduling
-    "clever_custom_sections",   # Custom sections sync
+    # clever_custom_sections dropped — district-specific feature
     # role_sync (Google-group → role mapping) deliberately stripped.
     # Lite uses direct admin-assigned roles via the Access → User Access
     # panel; receiving districts don't need to maintain Google Groups
