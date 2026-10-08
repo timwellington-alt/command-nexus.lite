@@ -33,8 +33,26 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["settings"])
 templates = Jinja2Templates(directory="app/templates")
 
+# Settings groups kept in nexus-lite — only the backing-integration-is-
+# shipped subset of the full nexus SETTING_GROUPS dict. Receiving
+# districts that wire a stripped module back in can re-enable its
+# settings panel by adding the key here (the full definitions still
+# live in the dict below, they're just filtered out at module load).
+LITE_KEPT_KEYS = {
+    "branding",                 # District name / colors / building map
+    "google",                   # Workspace OAuth + API creds
+    "role_sync",                # Google-group → Nexus-role mapping
+    "hr_smb",                   # HR data via SMB share (option 1)
+    "hr_sheets",                # HR data via Google Sheets (option 2)
+    "room_roster",              # Staff → room assignments
+    "staff",                    # Staff provisioning rules
+    "roster",                   # SIS CSV import settings
+    "guidance",                 # Guidance queue scheduling
+    "clever_custom_sections",   # Custom sections sync
+}
+
 # Setting definitions per integration: (key, label, is_secret_ref)
-SETTING_GROUPS = {
+_SETTING_GROUPS_FULL = {
     # ── General (shared infrastructure) ──────────────────────────────
     "branding": {
         "label": "District Branding",
@@ -745,6 +763,10 @@ SETTING_GROUPS = {
         ],
     },
 }
+
+# Filter down to the integrations shipped in lite. Add to LITE_KEPT_KEYS
+# above to re-enable a group.
+SETTING_GROUPS = {k: v for k, v in _SETTING_GROUPS_FULL.items() if k in LITE_KEPT_KEYS}
 
 
 @router.get("/settings", response_class=HTMLResponse)
