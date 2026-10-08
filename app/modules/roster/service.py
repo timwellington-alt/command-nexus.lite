@@ -255,11 +255,15 @@ async def provision_student_account(
     target_ou = ou_map.get(student.school) or ou_map.get("*") or "/Users-Students"
 
     # ── Build expected email ──
+    from app.modules.roster.email_format import EmailBuilder
+    email_builder = await EmailBuilder.load(db)
     email = (student.email or "").strip().lower()
     if not email:
         grad_year = expected_grad_year(student.grade) if student.grade else None
         if grad_year and student.last_name and student.first_name:
-            email = build_expected_email(student.last_name, student.first_name, grad_year, domain=domain)
+            email = email_builder.build(student.last_name, student.first_name, grad_year, sid=student.sis_id)
+            if not email:
+                return {"status": "error", "detail": "Could not generate email (empty from format)"}
         else:
             return {"status": "error", "detail": "No email in SIS and cannot generate (missing name/grade)"}
 
@@ -324,9 +328,16 @@ async def provision_student_account(
                 return {"status": "reactivated", "email": email, "actions": actions}
 
             elif g_employee_id and g_employee_id != student.sis_id:
-                # ── Different student with same email — disambiguate ──
-                new_email = build_expected_email(student.last_name, student.first_name,
-                    expected_grad_year(student.grade) or 0, domain=domain, disambiguate=True)
+                # ── Different student with same email — apply the
+                # operator's configured collision strategy.
+                new_email = email_builder.build(
+                    student.last_name, student.first_name,
+                    expected_grad_year(student.grade) or 0,
+                    sid=student.sis_id, attempt=1,
+                )
+                if new_email is None:
+                    # Collision strategy = reject_for_review
+                    return {"status": "error", "detail": f"Email {email} is taken by SID {g_employee_id} — collision strategy is set to reject; please review manually"}
 
                 if await google.check_email_exists(new_email):
                     return {"status": "error", "detail": f"Both {email} and {new_email} already exist in Google"}
@@ -399,8 +410,13 @@ async def provision_student_account(
                     # far more often than it saves a Rachel/Rachael
                     # spelling variant. The disambiguation path is safe
                     # and reversible; a wrong flag is not.
-                    new_email = build_expected_email(student.last_name, student.first_name,
-                        expected_grad_year(student.grade) or 0, domain=domain, disambiguate=True)
+                    new_email = email_builder.build(
+                        student.last_name, student.first_name,
+                        expected_grad_year(student.grade) or 0,
+                        sid=student.sis_id, attempt=1,
+                    )
+                    if new_email is None:
+                        return {"status": "error", "detail": f"Email {email} taken by same-name (no SID) and collision strategy set to reject; please review manually"}
                     if await google.check_email_exists(new_email):
                         return {"status": "error", "detail": f"Both {email} and {new_email} exist. Manual intervention needed."}
                     result = await google.create_account(email=new_email, first_name=student.first_name,

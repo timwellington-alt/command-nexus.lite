@@ -1328,6 +1328,48 @@ function renderPanels(groups, settings) {
         </div>`;
       }
 
+      // Student email FORMAT dropdown — presets map to Python
+      // builders in app/modules/roster/email_format.py. Keep the
+      // option values in sync with FORMATS there.
+      if (f.key === 'student_email_format') {
+        const current = (v || 'last_first_init_yy').toLowerCase();
+        const opts = [
+          ['last_first_init_yy', 'lastname + first initial + 2-digit year  (smithj26)'],
+          ['last_first2_yy',     'lastname + 2 first letters + 2-digit year  (smithjo26)'],
+          ['first_dot_last_yy',  'firstname.lastname + 2-digit year  (john.smith26)'],
+          ['first_dot_last',     'firstname.lastname (no year)  (john.smith)'],
+          ['sid',                'SIS student ID  (123456)'],
+        ].map(([val, lbl]) =>
+          `<option value="${val}" ${current === val ? 'selected' : ''}>${lbl}</option>`
+        ).join('');
+        return `<div class="field" style="flex-direction:column;align-items:stretch">
+          <label>${f.label}</label>
+          <select class="setting-input" data-integration="${key}" data-key="${f.key}" data-secret="false" data-masked="false"
+            style="width:100%;max-width:520px;padding:6px 10px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:4px;font-size:13px;font-family:ui-monospace,monospace">
+            ${opts}
+          </select>
+        </div>`;
+      }
+
+      // Collision strategy dropdown — maps to COLLISIONS in email_format.py.
+      if (f.key === 'student_email_collision') {
+        const current = (v || 'extend_first_name').toLowerCase();
+        const opts = [
+          ['extend_first_name', 'Add more first-name letters  (smithj26 → smithjo26 → smithjoh26)'],
+          ['numeric_suffix',    'Append a number  (smithj26 → smithj262 → smithj263)'],
+          ['reject_for_review', 'Reject and queue for admin review'],
+        ].map(([val, lbl]) =>
+          `<option value="${val}" ${current === val ? 'selected' : ''}>${lbl}</option>`
+        ).join('');
+        return `<div class="field" style="flex-direction:column;align-items:stretch">
+          <label>${f.label}</label>
+          <select class="setting-input" data-integration="${key}" data-key="${f.key}" data-secret="false" data-masked="false"
+            style="width:100%;max-width:520px;padding:6px 10px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:4px;font-size:13px">
+            ${opts}
+          </select>
+        </div>`;
+      }
+
       // Three-state dropdown for the student provisioning pipeline.
       // Collapses the old enable+writes pair into one explicit mode.
       if (f.key === 'student_provisioning_mode') {

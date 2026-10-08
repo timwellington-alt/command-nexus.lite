@@ -144,8 +144,11 @@ async def provision_new_students(
     from app.integrations.google.adapter import GoogleWorkspaceAdapter
     from app.integrations.api_log import log_api_command
     from app.modules.roster.clever_service import build_expected_email, expected_grad_year
+    from app.modules.roster.email_format import EmailBuilder
     from app.modules.roster import repository as repo
     from app.audit.service import log_action
+
+    email_builder = await EmailBuilder.load(db)
 
     result = {"provisioned": 0, "reactivated": 0, "review_flagged": 0, "skipped": 0, "errors": 0, "details": []}
 
@@ -186,7 +189,11 @@ async def provision_new_students(
 
         email = existing_email if existing_email and existing_email.endswith(f"@{domain}") else None
         if not email:
-            email = build_expected_email(last_name, first_name, grad_year, domain=domain)
+            email = email_builder.build(last_name, first_name, grad_year, sid=sid)
+            if not email:
+                result["skipped"] += 1
+                result["details"].append({"sis_id": sid, "action": "skipped", "reason": "empty_email_from_format"})
+                continue
 
         target_ou = _resolve_ou(school, ou_map)
         temp_password = _build_password(pwd_template, sid)
@@ -377,7 +384,11 @@ async def provision_new_students(
                         # Name mismatch (whether close or wildly different) →
                         # disambiguate. Sibling collisions are far more common
                         # than spelling-variant-of-same-person.
-                        new_email = build_expected_email(last_name, first_name, grad_year, domain=domain, disambiguate=True)
+                        new_email = email_builder.build(last_name, first_name, grad_year, sid=sid, attempt=1)
+                        if not new_email:
+                            result["errors"] += 1
+                            result["details"].append({"sis_id": sid, "action": "error", "reason": "collision_strategy_reject"})
+                            continue
                         await _create_disambiguated(
                             db, gws, new_email, first_name, last_name, target_ou,
                             temp_password, sid, import_id, result,
@@ -586,6 +597,9 @@ async def handle_grade_changes(
     """
     from app.integrations.google.adapter import GoogleWorkspaceAdapter
     from app.modules.roster.clever_service import build_expected_email, expected_grad_year
+    from app.modules.roster.email_format import EmailBuilder
+
+    email_builder = await EmailBuilder.load(db)
     from app.audit.service import log_action
 
     result = {"renamed": 0, "already_correct": 0, "no_existing_account": 0,
@@ -622,7 +636,9 @@ async def handle_grade_changes(
         if not grad_year:
             result["skipped"] += 1; continue
 
-        expected_email = build_expected_email(last_name, first_name, grad_year, domain=domain)
+        expected_email = email_builder.build(last_name, first_name, grad_year, sid=sid)
+        if not expected_email:
+            result["skipped"] += 1; continue
         try:
             existing_at_new = await gws.get_user(expected_email)
         except Exception as e:

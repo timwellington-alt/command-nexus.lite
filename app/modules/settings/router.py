@@ -184,6 +184,20 @@ _SETTING_GROUPS_FULL = {
                 "The @domain Nexus uses to build student Google emails from their SIS ID. Example: students.yourdistrict.org",
             ),
             (
+                "student_email_format",
+                "Student email format",
+                False,
+                False,
+                "How Nexus derives the local-part of a student's email from their name + grade. Must match your district's existing convention — Nexus uses it both to CREATE new accounts and to FLAG existing accounts whose email drifted from the convention.",
+            ),
+            (
+                "student_email_collision",
+                "On collision — email already taken",
+                False,
+                False,
+                "Strategy when the primary email generated above already exists in Google Workspace. Nexus first checks whether the existing account belongs to the SAME student (SID match → reactivate) or has the same NAME with no SID (exact-match → link if admin confirms). Only genuinely different people trigger this strategy.",
+            ),
+            (
                 "student_default_password",
                 "Default password template",
                 False,
