@@ -809,14 +809,11 @@ function renderSidebar(groups) {
     if (!categories[cat]) categories[cat] = [];
     categories[cat].push({key, label: g.label});
   }
-  const order = ['General', 'Staff', 'Students', 'Roster', 'Access', 'Infrastructure', 'Chromebook', 'Phones', 'Security', 'Facilities', 'Alerts', 'Transportation', 'Operations', 'External APIs'];
+  const order = ['General', 'Staff', 'Students', 'Roster', 'Access', 'Alerts', 'External APIs'];
   const extras = {
-    'Staff': [{key: 'profiles', label: 'Provisioning Profiles'}, {key: 'hr_smb_tabs', label: 'HR Tab Mappings'}],
-    'Roster': [{key: 'student_ou_map', label: 'Student OU Map'}, {key: 'bell_schedules', label: 'Bell Schedules'}, {key: 'homeroom_periods', label: 'Homeroom Periods'}, {key: 'student_membership', label: 'Student Membership Codes'}, {key: 'attendance_recipients', label: 'Attendance Report Recipients', linkTo: '/settings/attendance-recipients'}, {key: 'clever_custom_sections_dash', label: 'Clever Custom Sections — Dashboard', linkTo: '/settings/clever-custom-sections'}],
+    'Staff': [{key: 'profiles', label: 'Provisioning Profiles'}],
+    'Roster': [{key: 'student_ou_map', label: 'Student OU Map'}, {key: 'student_membership', label: 'Student Membership Codes'}, {key: 'attendance_recipients', label: 'Attendance Report Recipients', linkTo: '/settings/attendance-recipients'}, {key: 'clever_custom_sections_dash', label: 'Clever Custom Sections — Dashboard', linkTo: '/settings/clever-custom-sections'}],
     'General': [{key: 'building_map', label: 'School → Building Map'}],
-    'Infrastructure': [{key: 'noc_sensors', label: 'NOC Sensors'}, {key: 'manual_switches', label: 'Manual Switches'}, {key: 'infra_tools', label: 'Infrastructure Tools'}, {key: 'device_kinds', label: 'Device Categories', linkTo: '/settings/device-kinds'}],
-    'Chromebook': [{key: 'direct_print', label: 'Direct-Print Printers', linkTo: '/settings/direct-print'}],
-    'Security': [{key: 'halo_recipients', label: 'HALO Alert Recipients'}],
     'Alerts': [{key: 'alerts', label: 'Alert Routing'}],
     {% if local_auth_enabled %}
     'Access': [{key: 'local_accounts', label: 'Local Accounts'}],
@@ -863,7 +860,7 @@ function renderStatusDashboard(groups) {
     if (!categories[cat]) categories[cat] = [];
     categories[cat].push({key, label: g.label});
   }
-  const order = ['General', 'Staff', 'Students', 'Access', 'Infrastructure', 'Chromebook', 'Phones', 'Security', 'Facilities', 'Alerts', 'Transportation', 'Operations', 'External APIs'];
+  const order = ['General', 'Staff', 'Students', 'Access', 'Alerts', 'External APIs'];
   const sorted = order.filter(c => categories[c]);
   for (const c of Object.keys(categories)) { if (!sorted.includes(c)) sorted.push(c); }
   const container = document.getElementById('status-grid-container');

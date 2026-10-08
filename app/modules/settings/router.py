@@ -42,8 +42,7 @@ LITE_KEPT_KEYS = {
     "branding",                 # District name / colors / building map
     "google",                   # Workspace OAuth + API creds
     "role_sync",                # Google-group → Nexus-role mapping
-    "hr_smb",                   # HR data via SMB share (option 1)
-    "hr_sheets",                # HR data via Google Sheets (option 2)
+    "hr_sheets",                # HR staff directory (single Google Sheet)
     "room_roster",              # Staff → room assignments
     "staff",                    # Staff provisioning rules
     "roster",                   # SIS CSV import settings
