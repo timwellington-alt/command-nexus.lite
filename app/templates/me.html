@@ -4,624 +4,213 @@
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); color: var(--text); font-family: var(--font-ui); font-size: 14px; min-height: 100vh; }
-
-  .user-badge { font-size: 12px; color: var(--muted); }
-
   .container { max-width: 1400px; margin: 0 auto; padding: 24px 20px; }
   h1 { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
   .sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
 
-  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 18px; margin-bottom: 16px; }
-  .card h2 { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
-  .card .helper { font-size: 12px; color: var(--muted); margin-bottom: 14px; line-height: 1.4; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 16px; max-width: 640px; }
+  .card h2 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+  .card .helper { font-size: 12px; color: var(--muted); margin-bottom: 14px; line-height: 1.5; }
 
-  .field-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .field-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
   .field-row:last-child { border-bottom: none; }
-  .field-row .label { color: var(--muted); }
-  .field-row .value { font-family: var(--font-mono); font-size: 12px; color: var(--text); }
-  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 500; }
-  .badge.warn { background: rgba(210,153,34,0.15); color: var(--warn); border: 1px solid rgba(210,153,34,0.3); }
-  .badge.ok { background: rgba(63,185,80,0.15); color: var(--success); border: 1px solid rgba(63,185,80,0.3); }
+  .field-row .label { color: var(--muted); min-width: 120px; }
+  .field-row .value { color: var(--text); font-family: var(--font-mono); font-size: 12px; text-align: right; flex: 1; }
 
-  select { width: 100%; padding: 10px 12px; background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius); font-size: 14px; appearance: none; -webkit-appearance: none; }
+  input[type="text"], input[type="date"] {
+    width: 100%; max-width: 320px; padding: 8px 10px;
+    background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    border-radius: 4px; font-size: 13px;
+  }
+  input:focus { outline: none; border-color: var(--accent); }
 
   .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
-  .btn { padding: 10px 16px; border-radius: var(--radius); font-size: 14px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: var(--surface); color: var(--text); flex: 1; min-width: 110px; }
-  .btn:active { opacity: 0.7; }
-  .btn:disabled { opacity: 0.5; cursor: default; }
+  .btn { padding: 8px 14px; border-radius: var(--radius); font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: var(--surface); color: var(--text); text-decoration: none; display: inline-block; }
+  .btn:hover { border-color: var(--accent); }
   .btn-primary { background: var(--accent); color: #000; border-color: var(--accent); }
-  .btn-secondary { background: transparent; color: var(--accent); border-color: var(--accent); }
+  .btn-danger { color: #f85149; border-color: rgba(248,81,73,0.4); }
+  .btn-danger:hover { background: rgba(248,81,73,0.08); border-color: #f85149; }
 
-  /* Inline help tooltip — anchor on a tiny info icon next to a label.
-     Tap also toggles via :focus so it works on iOS without a hover. */
-  .help-anchor { position: relative; display: inline-flex; align-items: center; gap: 6px; }
-  .help-icon {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 14px; height: 14px; border-radius: 50%;
-    background: var(--border); color: var(--text); font-size: 10px; font-weight: 700;
-    cursor: help; user-select: none; line-height: 1;
-  }
-  .help-tip {
-    visibility: hidden; opacity: 0; transition: opacity 0.12s;
-    position: absolute; left: 0; top: 100%; margin-top: 6px; z-index: 50;
-    background: var(--surface); color: var(--text);
-    border: 1px solid var(--border); border-radius: 6px;
-    padding: 10px 12px; min-width: 240px; max-width: 320px;
-    font-size: 12px; line-height: 1.5; font-weight: normal; text-transform: none;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-  }
-  .help-tip dt { font-weight: 700; color: var(--accent); margin-top: 4px; }
-  .help-tip dt:first-child { margin-top: 0; }
-  .help-tip dd { margin: 0 0 4px 0; color: var(--muted); }
-  .help-anchor:hover .help-tip,
-  .help-anchor:focus-within .help-tip { visibility: visible; opacity: 1; }
+  .msg { font-size: 12px; margin-top: 8px; min-height: 16px; }
+  .msg.ok { color: var(--success); }
+  .msg.err { color: var(--danger); }
 
-  @media (max-width: 600px) {
-    .container { padding: 16px 14px; }
-  }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 500; margin-right: 4px; }
+  .badge.ok { background: rgba(63,185,80,0.15); color: var(--success); border: 1px solid rgba(63,185,80,0.3); }
+  .badge.warn { background: rgba(210,153,34,0.15); color: var(--warn); border: 1px solid rgba(210,153,34,0.3); }
+  .badge.info { background: rgba(88,166,255,0.12); color: var(--accent); border: 1px solid rgba(88,166,255,0.3); }
+
+  .row-form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .row-form label { font-size: 12px; color: var(--muted); margin-right: 6px; }
 </style>
 {% endblock %}
+
 {% block content %}
 <div class="container">
   <h1>My Profile</h1>
-  <div class="sub">Personal alert routing for {{ user.name or user.email }}.</div>
+  <p class="sub">Account identity, security, and personal preferences.</p>
 
-  <!-- Out-of-office self-set. When today >= the chosen date, the
-       ticket routing resolver skips this user and walks the rule's
-       backup chain. Auto-expires after the date passes. -->
-  <div class="card" id="card-ooo">
-    <h2 style="margin:0 0 6px">Out of office</h2>
-    <p class="helper" id="ooo-helper">When set, ticket routing skips you until this date and falls back to the next person in the rule's backup chain.</p>
-    <div id="ooo-active-banner" style="display:none;background:rgba(210,153,34,0.10);border:1px solid var(--yellow);color:var(--yellow);padding:8px 12px;border-radius:6px;margin-bottom:10px;font-size:12px"></div>
-    <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap">
-      <div>
-        <label style="display:block;font-size:11px;color:var(--text-muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.04em">Out until (inclusive)</label>
-        <input id="ooo-until" type="date" style="padding:6px 10px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:4px;font-size:13px;font-family:inherit">
-      </div>
-      <button class="btn btn-primary" id="ooo-save-btn">Save</button>
-      <button class="btn" id="ooo-clear-btn" style="display:none">Clear</button>
-      <span id="ooo-status" style="font-size:11px;color:var(--text-muted);align-self:center"></span>
+  <!-- Identity -->
+  <div class="card" id="card-identity">
+    <h2>Identity</h2>
+    <p class="helper">Email + roles are admin-managed via Settings → User Access. Display name is yours to change.</p>
+    <div class="field-row"><span class="label">Email</span><span class="value" id="pf-email">—</span></div>
+    <div class="field-row"><span class="label">Auth method</span><span class="value" id="pf-method">—</span></div>
+    <div class="field-row"><span class="label">Roles</span><span class="value" id="pf-roles">—</span></div>
+    <div class="field-row" style="padding-top:14px">
+      <span class="label">Display name</span>
+      <input type="text" id="pf-name" placeholder="e.g. Jane Admin" style="margin-left:auto">
     </div>
-  </div>
-
-  <!-- Recipient picker (shown when not yet linked) -->
-  <div class="card" id="card-pick" style="display:none">
-    <h2>Link your alert recipient</h2>
-    <p class="helper">Pick the recipient that represents you. This determines who gets called and which device receives push notifications.</p>
-    <select id="recipient-select"></select>
     <div class="btn-row">
-      <button class="btn btn-primary" id="link-recipient-btn">Link Recipient</button>
+      <button class="btn btn-primary" id="pf-save-name">Save name</button>
     </div>
+    <div class="msg" id="pf-msg"></div>
   </div>
 
-  <!-- Linked recipient view -->
-  <div class="card" id="card-linked" style="display:none">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-      <h2 id="rl-label" style="margin:0"></h2>
-      <button class="btn" id="btn-edit" style="flex:none;padding:4px 12px;font-size:12px;min-width:0">Edit</button>
+  <!-- Security — only for local-auth users -->
+  <div class="card" id="card-security" style="display:none">
+    <h2>Security</h2>
+    <p class="helper">Password and 2-factor auth are managed on your local account.</p>
+    <div class="field-row"><span class="label">Password</span>
+      <span class="value">
+        <a href="/auth/local/change-password" class="btn">Change password</a>
+      </span>
     </div>
-
-    <!-- View mode -->
-    <div id="view-mode">
-      <p class="helper">Manage push notifications for this device, run a test push, or fire a test call to your phone.</p>
-      <div class="field-row"><span class="label">Extension</span><span class="value" id="rl-ext">—</span></div>
-      <div class="field-row"><span class="label">Number</span><span class="value" id="rl-num">—</span></div>
-      <div class="field-row"><span class="label">Phone MAC</span><span id="rl-mac"></span></div>
-      <div class="field-row"><span class="label">Home coords</span><span id="rl-coords"></span></div>
-      <div class="field-row"><span class="label">Severity threshold</span><span class="value" id="rl-sev">—</span></div>
-      <div class="field-row"><span class="label">Quiet hours</span><span class="value" id="rl-quiet">—</span></div>
-      <div class="field-row"><span class="label">Quiet override</span><span class="value" id="rl-quiet-ovr">—</span></div>
-      <div class="field-row"><span class="label">Call priority</span><span class="value" id="rl-prio">—</span></div>
-      <div class="field-row"><span class="label">Channels</span><span class="value" id="rl-channels">—</span></div>
-      <div class="field-row"><span class="label">Push devices</span><span class="value" id="rl-subs">0</span></div>
-
-      <div class="btn-row">
-        <button class="btn btn-primary" id="btn-subscribe">Subscribe This Device</button>
-        <button class="btn btn-secondary" id="btn-test-push">Test Push</button>
-        <button class="btn btn-secondary" id="btn-test-call">Test Call</button>
-      </div>
-      <div class="btn-row">
-        <button class="btn" id="btn-unlink" style="font-size:12px">Change linked recipient</button>
-      </div>
+    <div class="field-row"><span class="label">2-factor</span>
+      <span class="value" id="pf-totp-status">—</span>
     </div>
-
-    <!-- Edit mode -->
-    <div id="edit-mode" style="display:none">
-      <p class="helper">Update your phone, MAC address (for on-campus location detection), and home coordinates (for off-campus distance routing).</p>
-
-      <div style="margin-bottom:12px">
-        <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Phone number (E.164, e.g. +17405551212)</label>
-        <input id="ed-number" type="tel" placeholder="+17405551212"
-          style="width:100%;padding:9px 12px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:var(--radius);font-size:14px">
-      </div>
-
-      <div style="margin-bottom:12px">
-        <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Extension (4 digits)</label>
-        <input id="ed-ext" type="text" inputmode="numeric" placeholder="2010"
-          style="width:100%;padding:9px 12px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:var(--radius);font-size:14px">
-      </div>
-
-      <div style="margin-bottom:12px">
-        <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Phone WiFi MAC (for proximity routing)</label>
-        <input id="ed-mac" type="text" placeholder="AA:BB:CC:DD:EE:FF"
-          style="width:100%;padding:9px 12px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:var(--radius);font-size:14px;font-family:var(--font-mono)">
-        <div style="font-size:11px;color:var(--muted);margin-top:4px">Find this in iOS Settings → WiFi → tap the (i) next to your network → "MAC Address". Disable Private Address for the work WiFi.</div>
-      </div>
-
-      <div style="margin-bottom:8px">
-        <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Home location (used when off-campus)</label>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px">
-          <input id="ed-lat" type="number" step="any" placeholder="Latitude"
-            style="padding:9px 12px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:var(--radius);font-size:14px">
-          <input id="ed-lon" type="number" step="any" placeholder="Longitude"
-            style="padding:9px 12px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:var(--radius);font-size:14px">
-        </div>
-        <button class="btn" id="btn-use-loc" style="font-size:12px;padding:6px 12px">📍 Use current location</button>
-      </div>
-
-      <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border)">
-        <div style="font-size:13px;font-weight:600;margin-bottom:10px">Alert preferences</div>
-
-        <div style="margin-bottom:12px">
-          <span class="help-anchor" tabindex="0" style="margin-bottom:4px">
-            <label style="font-size:11px;color:var(--muted);display:block">Severity threshold (only call me for this severity or higher)</label>
-            <span class="help-icon" aria-label="Severity level definitions">?</span>
-            <div class="help-tip" role="tooltip">
-              <dl style="margin:0">
-                <dt>critical</dt><dd>district-wide impact: internet, core switch, building down</dd>
-                <dt>high</dt><dd>significant local failure: building switch, key server</dd>
-                <dt>medium</dt><dd>degraded but operational: single AP, redundant link down</dd>
-                <dt>info</dt><dd>heads-up only, no immediate action expected</dd>
-              </dl>
-            </div>
-          </span>
-          <select id="ed-sev"
-            style="width:100%;padding:9px 12px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:var(--radius);font-size:14px">
-            <option value="critical">critical</option>
-            <option value="high">high</option>
-            <option value="medium">medium</option>
-            <option value="info">info</option>
-          </select>
-        </div>
-
-        <div style="margin-bottom:12px">
-          <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Quiet hours (24h, blank = no quiet window)</label>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-            <input id="ed-qstart" type="time" placeholder="22:00"
-              style="padding:9px 12px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:var(--radius);font-size:14px">
-            <input id="ed-qend" type="time" placeholder="06:00"
-              style="padding:9px 12px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:var(--radius);font-size:14px">
-          </div>
-          <div style="font-size:11px;color:var(--muted);margin-top:4px">Push still arrives during quiet hours; voice calls are suppressed unless overridden.</div>
-          <label style="display:flex;align-items:center;gap:6px;font-size:13px;margin-top:8px;cursor:pointer">
-            <input id="ed-qweekends" type="checkbox" style="width:16px;height:16px;accent-color:var(--accent)">
-            Treat Saturday and Sunday as quiet days
-          </label>
-        </div>
-
-        <div style="margin-bottom:12px">
-          <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Quiet hours override (severity that bypasses quiet hours; blank = none)</label>
-          <select id="ed-qovr"
-            style="width:100%;padding:9px 12px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:var(--radius);font-size:14px">
-            <option value="">— none —</option>
-            <option value="critical">critical</option>
-            <option value="high">high</option>
-            <option value="medium">medium</option>
-          </select>
-        </div>
-
-        <div style="margin-bottom:12px">
-          <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Call priority (lower = called first when location data isn't set)</label>
-          <input id="ed-prio" type="number" min="0" max="9999" placeholder="100"
-            style="width:100%;padding:9px 12px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:var(--radius);font-size:14px">
-        </div>
-
-        <div style="margin-bottom:12px">
-          <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:6px">Notification channels</label>
-          <div style="display:flex;gap:18px">
-            <label style="display:inline-flex;align-items:center;gap:8px;font-size:14px;cursor:pointer">
-              <input type="checkbox" id="ed-voice" style="width:16px;height:16px">
-              Voice calls
-            </label>
-            <label style="display:inline-flex;align-items:center;gap:8px;font-size:14px;cursor:pointer">
-              <input type="checkbox" id="ed-push" style="width:16px;height:16px">
-              Push notifications
-            </label>
-          </div>
-          <div style="font-size:11px;color:var(--muted);margin-top:4px">Uncheck a channel to opt out — alerts will still route to other channels you keep on.</div>
-        </div>
-      </div>
-
-      <div class="btn-row">
-        <button class="btn btn-primary" id="btn-save-edits">Save</button>
-        <button class="btn" id="btn-cancel-edits">Cancel</button>
-      </div>
+    <div class="btn-row">
+      <button class="btn btn-danger" id="pf-reset-totp">Reset 2-factor</button>
     </div>
+    <p class="helper" style="margin-top:14px;margin-bottom:0">Resetting 2-factor signs you out and forces re-pairing with an authenticator app on next login. Use this if you lost access to the app you originally paired.</p>
+    <div class="msg" id="pf-sec-msg"></div>
   </div>
 
-  <div class="card" id="card-loading">Loading…</div>
+  <!-- Out of office -->
+  <div class="card" id="card-ooo">
+    <h2>Out of office</h2>
+    <p class="helper">Set an end date to mark yourself unavailable. Routing rules + ticket assignment skip you until this date passes. Leave blank to clear.</p>
+    <div class="row-form">
+      <label for="pf-ooo">Away until</label>
+      <input type="date" id="pf-ooo">
+      <button class="btn btn-primary" id="pf-save-ooo">Save</button>
+      <button class="btn" id="pf-clear-ooo">Clear</button>
+    </div>
+    <div class="msg" id="pf-ooo-msg"></div>
+  </div>
+
+  <!-- Session / sign out -->
+  <div class="card">
+    <h2>Session</h2>
+    <p class="helper">Sign out to end this session on this browser.</p>
+    <a class="btn" href="/auth/local/logout" id="pf-signout-local" style="display:none">Sign out</a>
+    <a class="btn" href="/auth/logout" id="pf-signout-google" style="display:none">Sign out of Google</a>
+  </div>
 </div>
 {% endblock %}
+
 {% block scripts %}
 <script nonce="{{ request.state.csp_nonce }}">
-let _swReg = null;
+const HP = {'X-Requested-With':'CommandNexus'};
 let _profile = null;
 
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/static/sw.js')
-    .then(reg => { _swReg = reg; })
-    .catch(err => console.warn('SW reg failed:', err));
-}
-
-function toast(msg, ok) {
-  let t = document.getElementById('toast');
-  if (!t) {
-    t = document.createElement('div');
-    t.id = 'toast';
-    t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);padding:10px 18px;border-radius:8px;font-size:13px;font-weight:500;z-index:9999;max-width:90vw;text-align:center;box-shadow:0 4px 16px rgba(0,0,0,0.5)';
-    document.body.appendChild(t);
-  }
-  t.textContent = msg;
-  t.style.background = ok === true ? 'var(--success)' : ok === false ? 'var(--danger)' : 'var(--surface)';
-  t.style.color = ok === true ? '#000' : '#fff';
-  t.style.border = ok === null ? '1px solid var(--border)' : 'none';
-  t.style.display = 'block';
-  clearTimeout(t._timer);
-  if (ok !== null) t._timer = setTimeout(() => t.style.display = 'none', ok ? 4000 : 7000);
-}
-
 async function loadProfile() {
-  const r = await fetch('/api/me/profile', {credentials:'same-origin', headers:{'X-Requested-With':'CommandNexus'}});
-  if (!r.ok) { document.getElementById('card-loading').textContent = 'Failed to load profile.'; return; }
+  const r = await fetch('/api/me/profile', {headers: HP});
+  if (!r.ok) {
+    document.getElementById('pf-msg').textContent = 'Failed to load profile ('+r.status+')';
+    return;
+  }
   _profile = await r.json();
+  const p = _profile;
 
-  document.getElementById('card-loading').style.display = 'none';
-  renderOOO(_profile.out_of_office_until);
+  document.getElementById('pf-email').textContent = p.email || '';
+  document.getElementById('pf-method').textContent = p.auth_method === 'local' ? 'Local account' : 'Google';
 
-  if (_profile.recipient) {
-    renderLinkedRecipient(_profile.recipient);
+  const rolesEl = document.getElementById('pf-roles');
+  rolesEl.innerHTML = '';
+  if ((p.roles || []).length) {
+    for (const r of p.roles) {
+      const span = document.createElement('span');
+      span.className = 'badge info';
+      span.textContent = r;
+      rolesEl.appendChild(span);
+    }
   } else {
-    await renderPicker();
+    rolesEl.textContent = 'No roles assigned';
+  }
+
+  document.getElementById('pf-name').value = p.name || '';
+  document.getElementById('pf-ooo').value = p.out_of_office_until || '';
+
+  // Security card: local-auth only
+  if (p.is_local) {
+    document.getElementById('card-security').style.display = '';
+    const tEl = document.getElementById('pf-totp-status');
+    if (p.totp_enrolled_at) {
+      const d = new Date(p.totp_enrolled_at).toLocaleDateString();
+      tEl.innerHTML = `<span class="badge ok">Enrolled</span> since ${d}`;
+    } else {
+      tEl.innerHTML = `<span class="badge warn">Not enrolled</span>`;
+    }
+    document.getElementById('pf-signout-local').style.display = '';
+  } else {
+    document.getElementById('pf-signout-google').style.display = '';
   }
 }
 
-function renderOOO(untilStr) {
-  const input  = document.getElementById('ooo-until');
-  const banner = document.getElementById('ooo-active-banner');
-  const clearBtn = document.getElementById('ooo-clear-btn');
-  input.value = untilStr || '';
-  if (untilStr) {
-    banner.style.display = 'block';
-    banner.textContent = `You're marked out of office through ${untilStr}. Ticket routing will skip you until then.`;
-    clearBtn.style.display = '';
-  } else {
-    banner.style.display = 'none';
-    clearBtn.style.display = 'none';
-  }
-}
-
-async function saveOOO() {
-  const val = document.getElementById('ooo-until').value || null;
-  const status = document.getElementById('ooo-status');
-  status.textContent = 'Saving…';
+async function patchProfile(body, msgEl) {
+  msgEl.textContent = '';
   try {
-    const r = await fetch('/api/me/ooo', {
-      method:'PATCH', credentials:'same-origin',
-      headers:{'Content-Type':'application/json', 'X-Requested-With':'CommandNexus'},
-      body: JSON.stringify({until: val}),
+    const r = await fetch('/api/me/profile', {
+      method: 'PATCH',
+      headers: {...HP, 'Content-Type':'application/json'},
+      body: JSON.stringify(body),
     });
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`);
-    renderOOO(d.out_of_office_until);
-    status.textContent = d.out_of_office_until ? `Saved — out until ${d.out_of_office_until}` : 'Cleared';
-    setTimeout(() => status.textContent = '', 3000);
+    if (!r.ok) {
+      const txt = await r.text();
+      throw new Error(txt || ('HTTP '+r.status));
+    }
+    msgEl.className = 'msg ok';
+    msgEl.textContent = 'Saved';
+    setTimeout(() => { msgEl.textContent = ''; }, 2500);
   } catch (e) {
-    status.textContent = `Failed: ${e.message}`;
+    msgEl.className = 'msg err';
+    msgEl.textContent = 'Save failed: ' + (e.message || e);
   }
 }
 
-async function clearOOO() {
-  document.getElementById('ooo-until').value = '';
-  await saveOOO();
-}
+document.getElementById('pf-save-name').addEventListener('click', () => {
+  const name = document.getElementById('pf-name').value.trim();
+  patchProfile({name}, document.getElementById('pf-msg'));
+});
 
-async function renderPicker() {
-  const r = await fetch('/api/me/recipient-options', {credentials:'same-origin', headers:{'X-Requested-With':'CommandNexus'}});
-  const opts = await r.json();
-  const sel = document.getElementById('recipient-select');
-  sel.innerHTML = opts.map(o => `<option value="${o.id}">${o.label}</option>`).join('');
-  document.getElementById('card-pick').style.display = '';
-  document.getElementById('card-linked').style.display = 'none';
-}
+document.getElementById('pf-save-ooo').addEventListener('click', () => {
+  const v = document.getElementById('pf-ooo').value || null;
+  patchProfile({out_of_office_until: v}, document.getElementById('pf-ooo-msg'));
+});
 
-function renderLinkedRecipient(r) {
-  document.getElementById('rl-label').textContent = r.label;
-  document.getElementById('rl-ext').textContent = r.extension || '—';
-  document.getElementById('rl-num').textContent = r.number_e164 || '—';
-  document.getElementById('rl-mac').innerHTML = r.mac_address
-    ? `<span class="value">${r.mac_address}</span>`
-    : `<span class="badge warn">not set</span>`;
-  document.getElementById('rl-coords').innerHTML = (r.home_lat && r.home_lon)
-    ? `<span class="value">${r.home_lat.toFixed(4)}, ${r.home_lon.toFixed(4)}</span>`
-    : `<span class="badge warn">not set</span>`;
-  document.getElementById('rl-sev').textContent = r.severity_threshold || 'critical';
-  document.getElementById('rl-quiet').textContent = (r.quiet_hours_start && r.quiet_hours_end)
-    ? `${r.quiet_hours_start} – ${r.quiet_hours_end}`
-    : 'none';
-  document.getElementById('rl-quiet-ovr').textContent = r.quiet_hours_override_severity || 'none';
-  document.getElementById('rl-prio').textContent = r.priority_order ?? '—';
-  // voice_enabled / push_enabled default true for legacy rows.
-  const vOn = r.voice_enabled !== false;
-  const pOn = r.push_enabled !== false;
-  let chans = [];
-  if (vOn) chans.push('Voice'); else chans.push('<span class="badge warn">Voice off</span>');
-  if (pOn) chans.push('Push'); else chans.push('<span class="badge warn">Push off</span>');
-  document.getElementById('rl-channels').innerHTML = chans.join(' · ');
-  document.getElementById('rl-subs').textContent = r.push_subscriptions;
-  document.getElementById('card-pick').style.display = 'none';
-  document.getElementById('card-linked').style.display = '';
-}
+document.getElementById('pf-clear-ooo').addEventListener('click', () => {
+  document.getElementById('pf-ooo').value = '';
+  patchProfile({out_of_office_until: null}, document.getElementById('pf-ooo-msg'));
+});
 
-async function linkRecipient() {
-  const rid = parseInt(document.getElementById('recipient-select').value);
-  const r = await fetch('/api/me/profile', {
-    method: 'PATCH', credentials: 'same-origin',
-    headers: {'Content-Type':'application/json','X-Requested-With':'CommandNexus'},
-    body: JSON.stringify({voice_recipient_id: rid}),
-  });
-  if (!r.ok) {
-    const detail = await r.json().catch(() => ({detail: r.status + ' ' + r.statusText}));
-    toast('Link failed: ' + (detail.detail || r.status), false);
-    return;
-  }
-  await loadProfile();
-  toast('Linked!', true);
-}
-
-function toggleEdit(on) {
-  document.getElementById('view-mode').style.display = on ? 'none' : '';
-  document.getElementById('edit-mode').style.display = on ? '' : 'none';
-  document.getElementById('btn-edit').style.display = on ? 'none' : '';
-  if (on && _profile && _profile.recipient) {
-    const r = _profile.recipient;
-    document.getElementById('ed-number').value = r.number_e164 || '';
-    document.getElementById('ed-ext').value = r.extension || '';
-    document.getElementById('ed-mac').value = r.mac_address || '';
-    document.getElementById('ed-lat').value = r.home_lat ?? '';
-    document.getElementById('ed-lon').value = r.home_lon ?? '';
-    document.getElementById('ed-sev').value = r.severity_threshold || 'critical';
-    document.getElementById('ed-qstart').value = r.quiet_hours_start || '';
-    document.getElementById('ed-qend').value = r.quiet_hours_end || '';
-    document.getElementById('ed-qovr').value = r.quiet_hours_override_severity || '';
-    document.getElementById('ed-prio').value = r.priority_order ?? 100;
-    document.getElementById('ed-voice').checked = r.voice_enabled !== false;
-    document.getElementById('ed-push').checked  = r.push_enabled  !== false;
-    document.getElementById('ed-qweekends').checked = !!r.quiet_weekends;
-  }
-}
-
-function useCurrentLocation(btn) {
-  if (!('geolocation' in navigator)) { toast('Geolocation not supported.', false); return; }
-  const orig = btn.textContent;
-  btn.disabled = true; btn.textContent = '📍 Getting location…';
-  navigator.geolocation.getCurrentPosition(
-    pos => {
-      document.getElementById('ed-lat').value = pos.coords.latitude.toFixed(6);
-      document.getElementById('ed-lon').value = pos.coords.longitude.toFixed(6);
-      btn.disabled = false; btn.textContent = orig;
-      toast('Location filled in.', true);
-    },
-    err => {
-      btn.disabled = false; btn.textContent = orig;
-      toast('Location failed: ' + err.message, false);
-    },
-    { enableHighAccuracy: true, timeout: 10000 }
-  );
-}
-
-async function saveEdits(btn) {
-  const orig = btn.textContent;
-  btn.disabled = true; btn.textContent = 'Saving…';
+document.getElementById('pf-reset-totp').addEventListener('click', async () => {
+  if (!confirm('Reset 2-factor? You will be signed out and must re-pair your authenticator on next login.')) return;
+  const msg = document.getElementById('pf-sec-msg');
+  msg.textContent = '';
   try {
-    const payload = {
-      number_e164: document.getElementById('ed-number').value.trim() || null,
-      extension:   document.getElementById('ed-ext').value.trim() || null,
-      mac_address: document.getElementById('ed-mac').value.trim() || null,
-      home_lat:    document.getElementById('ed-lat').value || null,
-      home_lon:    document.getElementById('ed-lon').value || null,
-      severity_threshold:            document.getElementById('ed-sev').value,
-      quiet_hours_start:             document.getElementById('ed-qstart').value || null,
-      quiet_hours_end:               document.getElementById('ed-qend').value || null,
-      quiet_hours_override_severity: document.getElementById('ed-qovr').value || null,
-      priority_order:                parseInt(document.getElementById('ed-prio').value, 10) || 100,
-      voice_enabled: document.getElementById('ed-voice').checked,
-      push_enabled:  document.getElementById('ed-push').checked,
-      quiet_weekends: document.getElementById('ed-qweekends').checked,
-    };
-    const r = await fetch('/api/me/recipient', {
-      method: 'PATCH', credentials: 'same-origin',
-      headers: {'Content-Type':'application/json','X-Requested-With':'CommandNexus'},
-      body: JSON.stringify(payload),
-    });
+    const r = await fetch('/api/me/totp-reset', {method:'POST', headers: HP});
     if (!r.ok) {
-      const detail = await r.json().catch(() => ({detail: r.status}));
-      toast('Save failed: ' + (detail.detail || r.status), false); return;
-    }
-    toast('Saved.', true);
-    toggleEdit(false);
-    await loadProfile();
-  } catch(e) {
-    toast('Error: ' + e.message, false);
-  } finally {
-    btn.disabled = false; btn.textContent = orig;
-  }
-}
-
-async function unlinkRecipient() {
-  if (!confirm('Unlink this recipient from your profile?')) return;
-  const r = await fetch('/api/me/profile', {
-    method: 'PATCH', credentials: 'same-origin',
-    headers: {'Content-Type':'application/json','X-Requested-With':'CommandNexus'},
-    body: JSON.stringify({voice_recipient_id: null}),
-  });
-  if (!r.ok) {
-    const detail = await r.json().catch(() => ({detail: r.status + ' ' + r.statusText}));
-    toast('Unlink failed: ' + (detail.detail || r.status), false);
-    return;
-  }
-  await loadProfile();
-  toast('Unlinked.', true);
-}
-
-async function doSubscribe(btn) {
-  const orig = btn.textContent;
-  // Snapshot recipient at the moment of click — guards against unlinkRecipient()
-  // racing with the Subscribe flow on a double-tap.
-  const rcpt = _profile && _profile.recipient;
-  if (!rcpt) { toast('No recipient linked yet.', false); return; }
-  const recipientId = rcpt.id;
-  btn.disabled = true; btn.textContent = '…';
-  try {
-    const isStandalone = window.navigator.standalone === true ||
-                         window.matchMedia('(display-mode: standalone)').matches;
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-      toast('Push not supported. On iPhone, open Nexus from the Home Screen icon.', false); return;
-    }
-    if (/iphone|ipad|ipod/i.test(navigator.userAgent) && !isStandalone) {
-      toast('On iPhone, open Nexus from the Home Screen icon (not Safari).', false); return;
-    }
-
-    const perm = await Notification.requestPermission();
-    if (perm !== 'granted') {
-      toast('Permission denied — Settings app → Notifications → Nexus → Allow.', false); return;
-    }
-
-    if (!_swReg) {
-      _swReg = await navigator.serviceWorker.register('/static/sw.js');
-    }
-    // navigator.serviceWorker.ready resolves only when there IS an active SW —
-    // safer than the previous 800ms band-aid. Race with a 5s timeout to
-    // avoid the iOS-WebKit hang we hit earlier.
-    if (!_swReg.active) {
-      await Promise.race([
-        navigator.serviceWorker.ready,
-        new Promise(r => setTimeout(r, 5000)),
-      ]);
-    }
-
-    const keyResp = await fetch('/api/alerts/vapid/public-key', {credentials:'same-origin', headers:{'X-Requested-With':'CommandNexus'}});
-    if (!keyResp.ok) { toast('VAPID keys not configured. Ask your admin.', false); return; }
-    const { public_key } = await keyResp.json();
-
-    let sub = await _swReg.pushManager.getSubscription();
-    if (sub) await sub.unsubscribe();
-    sub = await _swReg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: b64ToUint8(public_key),
-    });
-
-    const sj = sub.toJSON();
-    const r = await fetch('/api/alerts/push/subscribe', {
-      method: 'POST', credentials: 'same-origin',
-      headers: {'Content-Type':'application/json','X-Requested-With':'CommandNexus'},
-      body: JSON.stringify({recipient_id: recipientId, endpoint: sj.endpoint, p256dh: sj.keys.p256dh, auth: sj.keys.auth, user_agent: navigator.userAgent.slice(0, 200)}),
-    });
-    if (!r.ok) {
-      const detail = await r.json().catch(() => ({detail: r.status + ' ' + r.statusText}));
-      toast('Server error: ' + (detail.detail || r.status), false); return;
-    }
-
-    toast('Push enabled for this device.', true);
-    await loadProfile();
-  } catch(e) {
-    toast('Error: ' + e.message, false);
-  } finally {
-    btn.disabled = false; btn.textContent = orig;
-  }
-}
-
-async function doTestPush(btn) {
-  const rcpt = _profile && _profile.recipient;
-  if (!rcpt) { toast('No recipient linked yet.', false); return; }
-  const recipientId = rcpt.id;
-  const label = rcpt.label;
-  const orig = btn.textContent;
-  btn.disabled = true; btn.textContent = '…';
-  try {
-    const r = await fetch('/api/alerts/push/test', {
-      method: 'POST', credentials: 'same-origin',
-      headers: {'Content-Type':'application/json','X-Requested-With':'CommandNexus'},
-      body: JSON.stringify({recipient_id: recipientId, title: 'Nexus Test', body: 'Test push for ' + label}),
-    });
-    if (!r.ok) {
-      const detail = await r.json().catch(() => ({detail: r.status + ' ' + r.statusText}));
-      toast('Test failed: ' + (detail.detail || r.status), false); return;
+      const txt = await r.text();
+      throw new Error(txt || ('HTTP '+r.status));
     }
     const data = await r.json();
-    if (data.sent > 0) toast(`Sent to ${data.sent} device${data.sent === 1 ? '' : 's'}.`, true);
-    else toast('No subscriptions found — subscribe first.', false);
-  } catch(e) {
-    toast('Test failed: ' + e.message, false);
-  } finally {
-    btn.disabled = false; btn.textContent = orig;
+    window.location.href = data.redirect || '/auth/local/logout';
+  } catch (e) {
+    msg.className = 'msg err';
+    msg.textContent = 'Reset failed: ' + (e.message || e);
   }
-}
-
-async function doTestCall(btn) {
-  const rcpt = _profile && _profile.recipient;
-  if (!rcpt) { toast('No recipient linked yet.', false); return; }
-  const recipientId = rcpt.id;
-  const label = rcpt.label;
-  if (!confirm('Fire a real test call to ' + label + '?')) return;
-  const orig = btn.textContent;
-  btn.disabled = true; btn.textContent = 'Calling…';
-  try {
-    const r = await fetch('/api/voice/test-alert', {
-      method: 'POST', credentials: 'same-origin',
-      headers: {'Content-Type':'application/json','X-Requested-With':'CommandNexus'},
-      body: JSON.stringify({
-        recipient_id: recipientId,
-        severity: 'critical',
-        summary: 'Test call from My Profile',
-        dry_run: false,
-        attempts_per_recipient: 1,
-        seconds_between_attempts: 0,
-      }),
-    });
-    if (r.status === 403) {
-      toast('Your account is not allowed to fire test calls.', false); return;
-    }
-    if (!r.ok) {
-      const detail = await r.json().catch(() => ({detail: r.status + ' ' + r.statusText}));
-      toast('Call failed: ' + (detail.detail || r.status), false); return;
-    }
-    const data = await r.json();
-    toast('Call: ' + (data.outcome || 'sent'), data.outcome === 'acked');
-  } catch(e) {
-    toast('Call failed: ' + e.message, false);
-  } finally {
-    btn.disabled = false; btn.textContent = orig;
-  }
-}
-
-function b64ToUint8(b64) {
-  const pad = '='.repeat((4 - b64.length % 4) % 4);
-  const raw = atob((b64 + pad).replace(/-/g,'+').replace(/_/g,'/'));
-  return Uint8Array.from(raw, c => c.charCodeAt(0));
-}
-
-// Wire button click handlers (CSP disallows inline onclick attributes).
-document.getElementById('ooo-save-btn').addEventListener('click', saveOOO);
-document.getElementById('ooo-clear-btn').addEventListener('click', clearOOO);
-document.getElementById('link-recipient-btn').addEventListener('click', linkRecipient);
-document.getElementById('btn-edit').addEventListener('click', () => toggleEdit(true));
-document.getElementById('btn-subscribe').addEventListener('click', (e) => doSubscribe(e.currentTarget));
-document.getElementById('btn-test-push').addEventListener('click', (e) => doTestPush(e.currentTarget));
-document.getElementById('btn-test-call').addEventListener('click', (e) => doTestCall(e.currentTarget));
-document.getElementById('btn-unlink').addEventListener('click', unlinkRecipient);
-document.getElementById('btn-use-loc').addEventListener('click', (e) => useCurrentLocation(e.currentTarget));
-document.getElementById('btn-save-edits').addEventListener('click', (e) => saveEdits(e.currentTarget));
-document.getElementById('btn-cancel-edits').addEventListener('click', () => toggleEdit(false));
+});
 
 loadProfile();
 </script>
