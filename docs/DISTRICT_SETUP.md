@@ -78,20 +78,48 @@ integrations.
 - **Super-admin access** to your Google Workspace tenant.
 - A **project in Google Cloud Console** you can create a service account in.
 - Willingness to enable **Domain-Wide Delegation** for that service
-  account against these scopes:
+  account against these scopes. Paste the full list, comma-separated,
+  into the Admin Console (Security → API controls → Domain-wide
+  delegation → Add new → Client ID + the scope list below).
 
   ```
-  https://www.googleapis.com/auth/admin.directory.user
-  https://www.googleapis.com/auth/admin.directory.user.readonly
-  https://www.googleapis.com/auth/admin.directory.group
-  https://www.googleapis.com/auth/admin.directory.group.readonly
-  https://www.googleapis.com/auth/admin.directory.orgunit
-  https://www.googleapis.com/auth/admin.directory.orgunit.readonly
-  https://www.googleapis.com/auth/gmail.readonly
-  https://www.googleapis.com/auth/gmail.send
-  https://www.googleapis.com/auth/spreadsheets
-  https://www.googleapis.com/auth/drive.readonly
+  https://www.googleapis.com/auth/admin.directory.user,
+  https://www.googleapis.com/auth/admin.directory.user.readonly,
+  https://www.googleapis.com/auth/admin.directory.group,
+  https://www.googleapis.com/auth/admin.directory.group.readonly,
+  https://www.googleapis.com/auth/admin.directory.group.member,
+  https://www.googleapis.com/auth/admin.directory.group.member.readonly,
+  https://www.googleapis.com/auth/admin.directory.orgunit.readonly,
+  https://www.googleapis.com/auth/apps.groups.settings,
+  https://www.googleapis.com/auth/apps.licensing,
+  https://www.googleapis.com/auth/gmail.readonly,
+  https://www.googleapis.com/auth/gmail.modify,
+  https://www.googleapis.com/auth/gmail.send,
+  https://www.googleapis.com/auth/spreadsheets,
+  https://www.googleapis.com/auth/spreadsheets.readonly,
+  https://www.googleapis.com/auth/drive
   ```
+
+  Why each scope:
+  - **admin.directory.user[.readonly]** — create / suspend / move /
+    read student + staff Google accounts.
+  - **admin.directory.group[.readonly / .member[.readonly]]** — manage
+    Google Group membership for role-based access.
+  - **admin.directory.orgunit.readonly** — read the OU tree so Nexus
+    can validate target OU paths before moving an account.
+  - **apps.groups.settings** — set group-level settings (whoCanJoin,
+    whoCanPostMessage, etc.) on auto-created groups.
+  - **apps.licensing** — assign the correct license SKU (Workspace
+    for Education, Google for Edu Plus, etc.) when creating a new
+    student account.
+  - **gmail.readonly / gmail.modify** — poll the SIS mailbox for
+    daily roster CSVs + mark them processed via label.
+  - **gmail.send** — send guidance queue notifications (Nexus
+    impersonates a district admin as the From: address).
+  - **spreadsheets[.readonly]** — read per-building Staff Directory
+    sheets + room roster sheets.
+  - **drive** — list / download the sheets referenced above by their
+    Drive IDs.
 
   Nexus impersonates a district admin mailbox for Gmail
   send/read, and hits Directory API as the service account itself.
