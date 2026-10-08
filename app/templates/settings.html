@@ -790,13 +790,9 @@ function showPanel(key) {
   if (key === 'user_access') {
     uaLoad();
   }
-  // Alerts panel: load recipients, buildings, VAPID key, cast targets
-  if (key === 'alerts') {
-    voiceLoadRecipients();
-    voiceLoadBuildings();
-    vapidLoadKey();
-    loadCastDevices();
-  }
+  // Alerts panel loaders stripped in lite — no event sources + no
+  // routing surface. If a future lite feature needs push, re-add
+  // vapidLoadKey() + the subscribe button here.
 }
 
 function showRoot() {
@@ -828,12 +824,11 @@ function renderSidebar(groups) {
     if (!categories[cat]) categories[cat] = [];
     categories[cat].push({key, label: g.label});
   }
-  const order = ['General', 'Staff', 'Students', 'Roster', 'Access', 'Alerts', 'External APIs'];
+  const order = ['General', 'Staff', 'Students', 'Roster', 'Access', 'External APIs'];
   const extras = {
     'Staff': [{key: 'profiles', label: 'Provisioning Profiles'}],
     'Roster': [{key: 'student_ou_map', label: 'Student OU Map'}, {key: 'student_membership', label: 'Student Membership Codes'}, {key: 'attendance_recipients', label: 'Attendance Report Recipients', linkTo: '/settings/attendance-recipients'}, {key: 'clever_custom_sections_dash', label: 'Clever Custom Sections — Dashboard', linkTo: '/settings/clever-custom-sections'}],
     'General': [{key: 'building_map', label: 'School → Building Map'}],
-    'Alerts': [{key: 'alerts', label: 'Alert Routing'}],
     'Access': [
       {key: 'user_access', label: 'User Access'},
       {% if local_auth_enabled %}{key: 'local_accounts', label: 'Local Accounts'},{% endif %}
@@ -880,7 +875,7 @@ function renderStatusDashboard(groups) {
     if (!categories[cat]) categories[cat] = [];
     categories[cat].push({key, label: g.label});
   }
-  const order = ['General', 'Staff', 'Students', 'Access', 'Alerts', 'External APIs'];
+  const order = ['General', 'Staff', 'Students', 'Access', 'External APIs'];
   const sorted = order.filter(c => categories[c]);
   for (const c of Object.keys(categories)) { if (!sorted.includes(c)) sorted.push(c); }
   const container = document.getElementById('status-grid-container');
