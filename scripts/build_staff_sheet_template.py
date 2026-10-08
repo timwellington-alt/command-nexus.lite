@@ -42,13 +42,14 @@ STAFF_COLUMNS = [
     ("preferred_name", "Preferred Name",   14, "Used on ID cards + the welcome page. Leave blank to default to First Name."),
     ("email",          "Email",            32, "Full district email (firstname.lastname@yourdistrict.org)"),
     ("position",       "Position / Title", 28, "Printed on the ID card. e.g. 'Grade 3 Teacher', 'Head Custodian'"),
-    ("classification", "Classification",   14, "One of: Cert | Class | Adm | Adm-Class | xmpt (per reference_hr_classification_codes)"),
-    ("school",         "Building",         20, "Must match a value in Settings → Branding → School → Building Map. Free text accepted; resolver handles common variants."),
+    ("classification", "Classification",   14, "One of: Cert | Class | Adm | Adm-Class | xmpt"),
     ("room",           "Room",             10, "Optional. Room number / code. Shown on staff profile."),
     ("extension",      "Phone Ext.",       10, "Internal phone extension (3-4 digits typically)"),
-    ("cert_number",    "OH Cert #",        14, "Ohio Dept. of Education teacher cert number. Optional. Appears on cert reports."),
+    ("cert_number",    "OH Cert #",        14, "Ohio Dept. of Education teacher cert number. Optional."),
     ("notes",          "HR Notes",         40, "Free text. Nexus parses 'former last name: X' from here to reconcile post-marriage/divorce records. Any other text ignored."),
 ]
+# Note: no 'Building' column — each sheet IS one building, config
+# at Settings → HR Google Sheets maps sheet_id → building code.
 
 
 # ─── Phone Directory tab formulas ─────────────────────────────────────
@@ -61,7 +62,6 @@ PHONE_COLUMNS = [
     ("Last Name",      14),
     ("First Name",     14),
     ("Position",       28),
-    ("Building",       20),
     ("Ext.",            8),
 ]
 
@@ -100,9 +100,9 @@ def _build_staff_tab(wb):
 
     # Add a couple of example rows so operators see the shape expected
     examples = [
-        ["Jane",  "Smith",   "", "jane.smith@yourdistrict.org",    "Grade 3 Teacher",   "Cert",     "Elementary",   "203",   "3203",  "123456", ""],
-        ["John",  "Taylor",  "Jack", "john.taylor@yourdistrict.org", "Head Custodian",   "Class",    "High School",  "Shop",  "1500",  "",       ""],
-        ["Maria", "Garcia",  "", "maria.garcia@yourdistrict.org",   "Assistant Superintendent", "Adm", "Central Office", "",   "100",   "",       "former last name: Lopez"],
+        ["Jane",  "Smith",   "",     "jane.smith@yourdistrict.org",    "Grade 3 Teacher",            "Cert",  "203",   "3203",  "123456", ""],
+        ["John",  "Taylor",  "Jack", "john.taylor@yourdistrict.org",   "Head Custodian",             "Class", "Shop",  "1500",  "",       ""],
+        ["Maria", "Garcia",  "",     "maria.garcia@yourdistrict.org",  "Assistant Superintendent",   "Adm",   "",      "100",   "",       "former last name: Lopez"],
     ]
     for row in examples:
         ws.append(row)
@@ -172,14 +172,16 @@ def _build_phone_tab(wb):
     # 365 as a dynamic array. Columns referenced by their heading
     # position in Staff Directory (not by name) so renaming headers
     # there breaks this formula — document that caveat.
+    # Columns: Last (B), First (A), Position (E), Ext (H).
+    # Sorted by Last Name, filtered to rows with a non-empty email + last.
     formula = (
         "=SORT("
         "FILTER("
-        "{{'Staff Directory'!B2:B,'Staff Directory'!A2:A,'Staff Directory'!E2:E,'Staff Directory'!G2:G,'Staff Directory'!I2:I}},"
+        "{{'Staff Directory'!B2:B,'Staff Directory'!A2:A,'Staff Directory'!E2:E,'Staff Directory'!H2:H}},"
         "'Staff Directory'!D2:D<>\"\","
         "'Staff Directory'!B2:B<>\"\""
         "),"
-        "4,TRUE,1,TRUE"
+        "1,TRUE"
         ")"
     )
     ws.cell(row=3, column=1, value=formula)
@@ -196,34 +198,40 @@ def _build_readme_tab(wb):
     lines = [
         ("Command Nexus — Staff Directory Template", 18, True, "2C3E50"),
         ("", 11, False, None),
-        ("1. Upload this file to Google Drive and open it as a Google Sheet.", 11, False, None),
-        ("   (Right-click in Drive → Open with → Google Sheets. Save as a Sheet.)", 11, False, None),
+        ("Each building keeps its OWN copy of this sheet. Nexus merges", 11, False, None),
+        ("every building's sheet into the staff directory nightly.", 11, False, None),
         ("", 11, False, None),
-        ("2. Share the resulting Sheet with your Nexus service account email", 11, False, None),
-        ("   (same account you pasted into secrets/google_service_account.json)", 11, False, None),
-        ("   with Viewer access.", 11, False, None),
+        ("1. Make one copy of this file per building (e.g. 'Staff Directory — PHS',", 11, False, None),
+        ("   'Staff Directory — PES', etc.) and upload each to Google Drive.", 11, False, None),
         ("", 11, False, None),
-        ("3. Copy the Sheet ID from its URL:", 11, False, None),
+        ("2. Open each copy with Google Sheets (Drive → Right-click → Open with →", 11, False, None),
+        ("   Google Sheets → save as a Sheet).", 11, False, None),
+        ("", 11, False, None),
+        ("3. Share each Sheet with your Nexus service account email (the account", 11, False, None),
+        ("   from secrets/google_service_account.json) — Viewer access is enough.", 11, False, None),
+        ("", 11, False, None),
+        ("4. Copy each Sheet ID from its URL:", 11, False, None),
         ("     https://docs.google.com/spreadsheets/d/XXXXXXXXXXX/edit", 11, False, None),
         ("                                       ^^^^^^^^^^^^", 11, False, None),
         ("", 11, False, None),
-        ("4. Paste the Sheet ID into Nexus Settings → HR Google Sheets →", 11, False, None),
-        ("   `sheet_id`. Nexus's HR sync job will poll the sheet nightly", 11, False, None),
-        ("   and populate the staff directory.", 11, False, None),
+        ("5. In Nexus → Settings → HR Google Sheets, click '+ Add Building' for", 11, False, None),
+        ("   each building. Pick the building code, paste the Sheet ID. The", 11, False, None),
+        ("   nightly HR sync will walk every building sheet.", 11, False, None),
         ("", 11, False, None),
         ("How this file is organized:", 13, True, None),
         ("", 11, False, None),
         ("• Staff Directory tab", 11, True, None),
-        ("    Your HR team enters one row per staff member. Column headers in", 11, False, None),
-        ("    row 1 are matched by Nexus's HR sync — don't rename them. The", 11, False, None),
-        ("    three example rows below the header are styled gray/italic and", 11, False, None),
-        ("    can be deleted or overwritten with real data.", 11, False, None),
+        ("    Your HR team enters one row per staff member in THIS building.", 11, False, None),
+        ("    No 'Building' column — the Nexus config supplies that for every", 11, False, None),
+        ("    row from this sheet. Column headers in row 1 are matched by Nexus,", 11, False, None),
+        ("    don't rename them. The three italic example rows can be deleted", 11, False, None),
+        ("    or overwritten with real data.", 11, False, None),
         ("", 11, False, None),
         ("• Phone Directory tab", 11, True, None),
-        ("    Printable 8.5×11 portrait view of staff phone extensions,", 11, False, None),
-        ("    sorted by building then last name. Pulls automatically from the", 11, False, None),
-        ("    Staff Directory tab via SORT(FILTER()). To print: File →", 11, False, None),
-        ("    Print → Current sheet.", 11, False, None),
+        ("    Printable 8.5×11 portrait view of this building's staff phone", 11, False, None),
+        ("    extensions, sorted by last name. Pulls automatically from the", 11, False, None),
+        ("    Staff Directory tab via SORT(FILTER()). To print: File → Print →", 11, False, None),
+        ("    Current sheet.", 11, False, None),
         ("", 11, False, None),
         ("Classification codes:", 13, True, None),
         ("", 11, False, None),

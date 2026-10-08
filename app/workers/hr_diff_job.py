@@ -53,27 +53,62 @@ async def check_hr_diffs(ctx: dict) -> dict:
 
     try:
         async with AsyncSessionLocal() as db:
-            # Read HR sheet (SMB first, then Google Sheets fallback)
-            hr_staff = None
-            smb_server = await get_setting_value(db, "hr_smb", "server")
-            if smb_server:
-                try:
-                    from app.integrations.smb.adapter import SmbExcelAdapter
-                    hr_staff = await SmbExcelAdapter(db).read_hr_staff()
-                except Exception as e:
-                    logger.warning(f"SMB HR read failed: {e}")
+            # Lite uses per-building Google Sheet config at hr_sheets.buildings.
+            # Walk each building sheet, merge rows, let the config building
+            # code win over whatever's in the sheet.
+            import json as _json
+            hr_staff: list[dict] = []
+            raw = await get_setting_value(db, "hr_sheets", "buildings")
+            try:
+                sheets_cfg = _json.loads(raw or "{}")
+            except Exception:
+                sheets_cfg = {}
 
-            if hr_staff is None:
-                sheet_id = await get_setting_value(db, "google", "hr_sheet_id")
-                if sheet_id:
-                    try:
-                        from app.integrations.google.sheets_adapter import GoogleSheetsAdapter
-                        hr_staff = await GoogleSheetsAdapter(db).read_hr_staff(sheet_id)
-                    except Exception as e:
-                        logger.warning(f"Google Sheets HR read failed: {e}")
+            if sheets_cfg:
+                try:
+                    from app.integrations.google.sheets_adapter import GoogleSheetsAdapter
+                    adapter = GoogleSheetsAdapter(db)
+                    for bcode, cfg in sheets_cfg.items():
+                        sheet_id = (cfg or {}).get("sheet_id", "").strip()
+                        if not sheet_id:
+                            continue
+                        tab_range = ((cfg or {}).get("range") or "Staff Directory!A:K").strip()
+                        try:
+                            rows = await adapter.read_sheet(sheet_id, tab_range)
+                        except Exception as e:
+                            logger.warning(f"HR sheet read failed for {bcode}: {e}")
+                            continue
+                        if not rows:
+                            continue
+                        headers = [(h or "").strip().lower().replace(" ", "_")
+                                   for h in rows[0]]
+                        for data_row in rows[1:]:
+                            if not any((c or "").strip() for c in data_row):
+                                continue
+                            rec = {}
+                            for i, col in enumerate(data_row):
+                                if i >= len(headers):
+                                    break
+                                key = headers[i]
+                                key = {
+                                    "position_/_title": "position",
+                                    "preferred_name": "preferred_name",
+                                    "phone_ext.": "extension",
+                                    "oh_cert_#": "cert_number",
+                                    "hr_notes": "notes",
+                                }.get(key, key)
+                                rec[key] = col
+                            rec["school"] = bcode
+                            rec["source_tab"] = bcode
+                            hr_staff.append(rec)
+                except Exception as e:
+                    logger.warning(f"Per-building HR sheets ingest failed: {e}")
 
             if not hr_staff:
-                result["error"] = "No HR data source available"
+                result["error"] = (
+                    "No HR data — configure at least one building sheet in "
+                    "Settings → Staff → HR Google Sheets."
+                )
                 return result
 
             logger.info(f"HR diff: loaded {len(hr_staff)} records from HR sheet")

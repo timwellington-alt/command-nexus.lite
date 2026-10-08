@@ -121,13 +121,15 @@ _SETTING_GROUPS_FULL = {
         "label": "HR Google Sheets",
         "category": "Staff",
         "fields": [
-            ("hr_sheet_id", "HR Master Sheet ID", False, False,
-             "Google Sheet ID (the XXXX in /spreadsheets/d/XXXX/edit). "
-             "Need a starting point? "
+            ("buildings", "Per-building staff directory sheets (managed below)", False, False,
+             "One Google Sheet per building. Each sheet uses the "
              "<a href=\"/settings/staff-template.xlsx\" download>"
-             "Download the Staff Directory template (.xlsx)</a>, upload "
-             "it to Drive, open with Sheets, share with your service "
-             "account, then paste the Sheet ID here."),
+             "Staff Directory template (.xlsx)</a>. Upload a copy to "
+             "Drive, open with Sheets, share with your service account "
+             "(Viewer), then paste the Sheet ID + the sheet range here. "
+             "The ingest job merges every building sheet into the staff "
+             "directory nightly; the building code you pick here "
+             "overrides whatever's in the sheet."),
         ],
     },
     "room_roster": {

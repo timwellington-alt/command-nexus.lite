@@ -157,30 +157,72 @@ async def sync_hr_data(ctx: dict) -> dict:
     try:
         async with AsyncSessionLocal() as db:
             from app.modules.settings.repository import get_setting_value
+            import json as _json
 
-            # Determine source — SMB or Google Sheets
-            smb_server = await get_setting_value(db, "hr_smb", "server")
-            hr_sheet_id = await get_setting_value(db, "google", "hr_sheet_id")
+            # Lite data source — per-building Google Sheet config at
+            # hr_sheets.buildings. JSON blob written by the Settings UI
+            # builder: {"PHS": {"sheet_id": "...", "range": "..."}, ...}
+            # The building code wins — whatever the sheet says in its
+            # "Building" column is ignored at ingest.
+            hr_records: list[dict] = []
+            raw = await get_setting_value(db, "hr_sheets", "buildings")
+            try:
+                sheets_cfg = _json.loads(raw or "{}")
+            except Exception:
+                sheets_cfg = {}
 
-            hr_records = []
-            if smb_server:
-                try:
-                    from app.integrations.smb.adapter import SmbExcelAdapter
-                    adapter = SmbExcelAdapter(db)
-                    hr_records = await adapter.read_hr_staff()
-                except Exception as e:
-                    logger.warning(f"SMB HR read failed: {e}")
-
-            if not hr_records and hr_sheet_id:
+            if sheets_cfg:
                 try:
                     from app.integrations.google.sheets_adapter import GoogleSheetsAdapter
                     adapter = GoogleSheetsAdapter(db)
-                    hr_records = await adapter.read_hr_staff()
+                    for bcode, cfg in sheets_cfg.items():
+                        sheet_id = (cfg or {}).get("sheet_id", "").strip()
+                        if not sheet_id:
+                            continue
+                        tab_range = ((cfg or {}).get("range") or "Staff Directory!A:K").strip()
+                        try:
+                            rows = await adapter.read_sheet(sheet_id, tab_range)
+                        except Exception as e:
+                            logger.warning(f"HR sheet read failed for {bcode}: {e}")
+                            continue
+                        # First non-empty row = headers. Match by lower-
+                        # cased header text so operator renames of the
+                        # friendly label (e.g. "Email" vs "email") still
+                        # resolve.
+                        if not rows:
+                            continue
+                        headers = [(h or "").strip().lower().replace(" ", "_")
+                                   for h in rows[0]]
+                        for data_row in rows[1:]:
+                            if not any((c or "").strip() for c in data_row):
+                                continue
+                            rec = {}
+                            for i, col in enumerate(data_row):
+                                if i >= len(headers):
+                                    break
+                                key = headers[i]
+                                # Normalize common header variants to the
+                                # keys hr_sync downstream expects.
+                                key = {
+                                    "position_/_title": "position",
+                                    "preferred_name": "preferred_name",
+                                    "phone_ext.": "extension",
+                                    "oh_cert_#": "cert_number",
+                                    "hr_notes": "notes",
+                                }.get(key, key)
+                                rec[key] = col
+                            # Config building code wins
+                            rec["school"] = bcode
+                            rec["source_tab"] = bcode
+                            hr_records.append(rec)
                 except Exception as e:
-                    logger.warning(f"Sheets HR read failed: {e}")
+                    logger.warning(f"Per-building HR sheets ingest failed: {e}")
 
             if not hr_records:
-                result["error"] = "No HR data source available"
+                result["error"] = (
+                    "No HR data — configure at least one building sheet in "
+                    "Settings → Staff → HR Google Sheets."
+                )
                 return result
 
             # Full replace — clear and rebuild

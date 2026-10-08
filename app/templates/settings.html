@@ -1157,6 +1157,16 @@ function renderPanels(groups, settings) {
         </div>`;
       }
 
+      // Per-building HR staff directory sheets
+      if (key === 'hr_sheets' && f.key === 'buildings') {
+        return `<div class="field" style="flex-direction:column;align-items:stretch">
+          <label style="margin-bottom:8px">Per-Building Staff Directory Sheets</label>
+          <div id="hr-sheets-builder" style="width:100%"></div>
+          <button class="tag-add-btn" style="align-self:flex-start;margin-top:8px" data-action="add-hr-sheet-entry">+ Add Building</button>
+          <input type="hidden" class="setting-input" data-integration="${key}" data-key="${f.key}" data-secret="false" data-masked="false" id="hr-sheets-hidden" value='${(v || "").replace(/'/g,"&apos;")}'>
+        </div>`;
+      }
+
       // Per-building room roster sheets
       if (key === 'room_roster' && f.key === 'buildings') {
         return `<div class="field" style="flex-direction:column;align-items:stretch">
@@ -5687,6 +5697,125 @@ function syncRoomRosterHidden() {
 
 setTimeout(initRoomRosterBuilder, 1500);
 
+
+// ─── HR Google Sheets — per-building builder ───────────────────────
+// Mirrors the room-roster pattern: a list of (building_code,
+// sheet_id, range) entries stored as JSON on hr_sheets.buildings.
+// The ingest worker iterates these; the admin never has to maintain
+// a group-role mapping or similar indirection.
+let _hrSheets = [];
+let _hrSheetBuildings = [];
+
+async function initHrSheetsBuilder() {
+    const hidden = document.getElementById('hr-sheets-hidden');
+    if (!hidden) return;
+    try {
+        const [names, bmap] = await Promise.all([
+            fetch('/api/settings/homeroom-periods', {headers: {'X-Requested-With':'CommandNexus'}}).then(r => r.json()).then(d => d.school_names || {}),
+            fetch('/api/settings/building-map', {headers: {'X-Requested-With':'CommandNexus'}}).then(r => r.json()).then(d => d.mappings || []).catch(() => []),
+        ]);
+        const seen = new Set();
+        _hrSheetBuildings = [];
+        for (const code of Object.keys(names).sort()) {
+            _hrSheetBuildings.push({code, name: names[code]});
+            seen.add(code);
+        }
+        for (const m of bmap) {
+            if (m.school_code && !seen.has(m.school_code)) {
+                const disp = names[m.building_code] || m.building_code || m.school_code;
+                _hrSheetBuildings.push({code: m.school_code, name: `${disp} — SIS`});
+                seen.add(m.school_code);
+            }
+        }
+    } catch(e) {
+        _hrSheetBuildings = [];
+    }
+    const raw = (hidden.value || '').trim();
+    _hrSheets = [];
+    if (raw.startsWith('{')) {
+        try {
+            const obj = JSON.parse(raw);
+            for (const code of Object.keys(obj).sort()) {
+                const cfg = obj[code] || {};
+                _hrSheets.push({
+                    code,
+                    sheet_id: cfg.sheet_id || '',
+                    range: cfg.range || '',
+                });
+            }
+        } catch(e) { _hrSheets = []; }
+    }
+    renderHrSheets();
+}
+
+function renderHrSheets() {
+    const container = document.getElementById('hr-sheets-builder');
+    if (!container) return;
+    if (!_hrSheets.length) {
+        container.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:8px">No building sheets configured. Click "+ Add Building" to add one.</div>';
+        syncHrSheetsHidden();
+        return;
+    }
+    container.innerHTML = _hrSheets.map((r, i) => {
+        const opts = _hrSheetBuildings.map(b =>
+            `<option value="${b.code}" ${b.code === r.code ? 'selected' : ''}>${b.name} (${b.code})</option>`
+        ).join('');
+        const dropdown = _hrSheetBuildings.length
+            ? `<select data-action="update-hr-sheet" data-idx="${i}" data-field="code" style="width:100%;padding:4px 8px;font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text)">
+                <option value="">— Select building —</option>${opts}
+              </select>`
+            : `<input type="text" value="${r.code}" placeholder="e.g. PHS" data-action="update-hr-sheet" data-idx="${i}" data-field="code" style="width:100%;padding:4px 8px;font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);text-transform:uppercase">`;
+        return `
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:12px;margin-bottom:8px;position:relative">
+            <button data-action="remove-hr-sheet" data-idx="${i}" style="position:absolute;top:8px;right:8px;background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:16px">&times;</button>
+            <div style="display:grid;grid-template-columns:1fr 2fr;gap:8px;margin-bottom:8px">
+                <div>
+                    <label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:2px">Building</label>
+                    ${dropdown}
+                </div>
+                <div>
+                    <label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:2px">Sheet ID</label>
+                    <input type="text" value="${r.sheet_id || ''}" data-action="update-hr-sheet" data-idx="${i}" data-field="sheet_id"
+                        placeholder="from the sheet URL" style="width:100%;padding:4px 8px;font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--font-mono)">
+                </div>
+            </div>
+            <div>
+                <label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:2px">Sheet Range (default: "Staff Directory!A:K")</label>
+                <input type="text" value="${r.range || ''}" data-action="update-hr-sheet" data-idx="${i}" data-field="range"
+                    placeholder="Staff Directory!A:K" style="width:100%;padding:4px 8px;font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--font-mono)">
+            </div>
+        </div>`;
+    }).join('');
+    syncHrSheetsHidden();
+}
+
+function addHrSheetEntry() {
+    _hrSheets.push({code: '', sheet_id: '', range: ''});
+    renderHrSheets();
+}
+function removeHrSheet(idx) {
+    _hrSheets.splice(idx, 1);
+    renderHrSheets();
+}
+function updateHrSheet(idx, field, value) {
+    if (!_hrSheets[idx]) return;
+    _hrSheets[idx][field] = (field === 'code') ? (value || '').toUpperCase() : value;
+    syncHrSheetsHidden();
+}
+function syncHrSheetsHidden() {
+    const hidden = document.getElementById('hr-sheets-hidden');
+    if (!hidden) return;
+    const obj = {};
+    for (const r of _hrSheets) {
+        if (!r.code || !r.sheet_id) continue;
+        obj[r.code] = {sheet_id: r.sheet_id};
+        if (r.range && r.range.trim()) obj[r.code].range = r.range.trim();
+    }
+    hidden.value = JSON.stringify(obj);
+}
+
+setTimeout(initHrSheetsBuilder, 1500);
+
 // ── Event wiring (CSP disallows inline handlers) ───────────────────────────
 //
 // Static handlers — one-time wire-up on page load. Each id corresponds to a
@@ -5743,6 +5872,7 @@ document.body.addEventListener('click', (e) => {
     case 'load-google-ous': loadGoogleOUs(); break;
     case 'add-guidance-group': addGuidanceGroup(); break;
     case 'add-room-roster-entry': addRoomRosterEntry(); break;
+    case 'add-hr-sheet-entry': addHrSheetEntry(); break;
     case 'tts-preview': ttsPreview(); break;
     case 'insert-at-cursor':
       insertAtCursor(document.getElementById(el.dataset.target), el.dataset.insert);
@@ -5918,6 +6048,7 @@ document.body.addEventListener('click', (e) => {
 
     // ── Room roster ─────────────────────────────────────────────
     case 'remove-room-roster': removeRoomRoster(Number(el.dataset.idx)); break;
+    case 'remove-hr-sheet': removeHrSheet(Number(el.dataset.idx)); break;
   }
 });
 
@@ -5975,6 +6106,11 @@ document.body.addEventListener('change', (e) => {
     case 'update-room-roster': {
       const v = el.dataset.field === 'code' ? (el.value || '').toUpperCase() : el.value;
       updateRoomRoster(Number(el.dataset.idx), el.dataset.field, v);
+      break;
+    }
+    case 'update-hr-sheet': {
+      const v = el.dataset.field === 'code' ? (el.value || '').toUpperCase() : el.value;
+      updateHrSheet(Number(el.dataset.idx), el.dataset.field, v);
       break;
     }
   }
