@@ -745,8 +745,12 @@
       <div class="panel-header">
         <span class="panel-title">User Access</span>
       </div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:10px">
+        Grant or revoke roles for each authenticated user. Local-auth users with the admin flag get the <strong>admin</strong> role automatically on login; everyone else starts with no roles until assigned here.
+      </p>
       <p style="font-size:12px;color:var(--muted);margin-bottom:16px">
-        Grant or revoke roles for each authenticated user. Local-auth users with the admin flag are auto-assigned the admin role on login; everyone else starts with no roles until promoted here.
+        Need to add a new user?
+        {% if local_auth_enabled %}<a href="#panel-local_accounts" data-action="show-panel" data-key="local_accounts" style="color:var(--accent)">Create a local account</a> (then come back here to assign roles).{% else %}They'll appear here after their first Google sign-in.{% endif %}
       </p>
       <div id="ua-msg" style="font-size:12px;margin-bottom:10px"></div>
       <div id="ua-list"></div>
@@ -4052,52 +4056,136 @@ async function uaLoad() {
       </tr></thead>
       <tbody>${users.map(u => uaRow(u)).join('')}</tbody>
     </table>`;
-    listEl.querySelectorAll('[data-ua-user]').forEach(el => {
-      el.addEventListener('change', () => uaSave(Number(el.dataset.uaUser)));
+    // Chip remove-x buttons
+    listEl.querySelectorAll('.ua-chip-remove').forEach(el => {
+      el.addEventListener('click', () => uaRemoveRole(
+        Number(el.dataset.uaUser), Number(el.dataset.uaRole)
+      ));
+    });
+    // Add-role dropdowns
+    listEl.querySelectorAll('.ua-add-select').forEach(el => {
+      el.addEventListener('change', (ev) => {
+        const roleId = Number(ev.target.value);
+        if (roleId) uaAddRole(Number(el.dataset.uaUser), roleId);
+      });
     });
   } catch (e) {
     listEl.innerHTML = `<p style="color:var(--red);font-size:12px">Error loading: ${e.message}</p>`;
   }
 }
 
+// Per-user in-memory snapshot of assigned role_ids. Mutated by chip
+// add/remove, then persisted on each change.
+const _ua_assigned = new Map();  // user_id → Set<role_id>
+
 function uaRow(u) {
   const last = u.last_login ? new Date(u.last_login).toLocaleDateString() : '—';
   const assigned = new Set((u.roles || []).map(r => r.role_id));
-  const chips = _ua_roles_cache.map(r =>
-    `<label style="display:inline-flex;align-items:center;gap:4px;margin-right:10px;font-size:11px">
-       <input type="checkbox" data-ua-user="${u.id}" data-ua-role="${r.id}" ${assigned.has(r.id) ? 'checked' : ''}>
-       ${r.name}
-     </label>`
-  ).join('');
+  _ua_assigned.set(u.id, assigned);
+
+  const chipsHtml = Array.from(assigned).map(rid => {
+    const r = _ua_roles_cache.find(x => x.id === rid);
+    if (!r) return '';
+    return `<span class="ua-chip" data-ua-user="${u.id}" data-ua-role="${rid}" style="display:inline-flex;align-items:center;gap:4px;padding:2px 6px 2px 8px;background:rgba(88,166,255,0.12);border:1px solid rgba(88,166,255,0.3);color:var(--accent);border-radius:10px;font-size:11px;margin-right:4px;margin-bottom:2px">
+      ${r.name}
+      <button type="button" aria-label="Remove ${r.name}" class="ua-chip-remove" data-ua-user="${u.id}" data-ua-role="${rid}" style="background:none;border:none;color:inherit;cursor:pointer;font-size:14px;line-height:1;padding:0 2px">×</button>
+    </span>`;
+  }).join('');
+
+  const options = _ua_roles_cache
+    .filter(r => !assigned.has(r.id))
+    .map(r => `<option value="${r.id}">${r.name}</option>`)
+    .join('');
+  const addControl = options
+    ? `<select class="ua-add-select" data-ua-user="${u.id}" style="padding:3px 6px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:3px;font-size:11px">
+         <option value="">+ Add role…</option>${options}
+       </select>`
+    : `<span style="font-size:11px;color:var(--muted)">(all roles assigned)</span>`;
+
   const inactive = u.is_active ? '' : ' <span style="color:var(--muted);font-size:10px">(inactive)</span>';
   return `<tr style="border-bottom:1px solid var(--border)">
-    <td style="padding:6px 8px"><code>${u.email}</code>${inactive}</td>
-    <td style="padding:6px 8px">${u.name || '—'}</td>
-    <td style="padding:6px 8px;color:var(--muted)">${last}</td>
-    <td style="padding:6px 8px">${chips}</td>
+    <td style="padding:8px"><code>${u.email}</code>${inactive}</td>
+    <td style="padding:8px">${u.name || '—'}</td>
+    <td style="padding:8px;color:var(--muted)">${last}</td>
+    <td style="padding:8px" id="ua-cell-${u.id}">
+      <div class="ua-chips" id="ua-chips-${u.id}">${chipsHtml}</div>
+      <div style="margin-top:6px">${addControl}</div>
+    </td>
   </tr>`;
+}
+
+async function uaAddRole(userId, roleId) {
+  const set = _ua_assigned.get(userId);
+  if (!set || set.has(roleId)) return;
+  set.add(roleId);
+  await uaSave(userId);
+  uaRerenderCell(userId);
+}
+
+async function uaRemoveRole(userId, roleId) {
+  const set = _ua_assigned.get(userId);
+  if (!set || !set.has(roleId)) return;
+  set.delete(roleId);
+  await uaSave(userId);
+  uaRerenderCell(userId);
+}
+
+function uaRerenderCell(userId) {
+  // Rebuild just this row's chip cell from _ua_assigned + role cache.
+  const cell = document.getElementById(`ua-cell-${userId}`);
+  if (!cell) return;
+  const assigned = _ua_assigned.get(userId) || new Set();
+  const chipsHtml = Array.from(assigned).map(rid => {
+    const r = _ua_roles_cache.find(x => x.id === rid);
+    if (!r) return '';
+    return `<span class="ua-chip" data-ua-user="${userId}" data-ua-role="${rid}" style="display:inline-flex;align-items:center;gap:4px;padding:2px 6px 2px 8px;background:rgba(88,166,255,0.12);border:1px solid rgba(88,166,255,0.3);color:var(--accent);border-radius:10px;font-size:11px;margin-right:4px;margin-bottom:2px">
+      ${r.name}
+      <button type="button" aria-label="Remove ${r.name}" class="ua-chip-remove" data-ua-user="${userId}" data-ua-role="${rid}" style="background:none;border:none;color:inherit;cursor:pointer;font-size:14px;line-height:1;padding:0 2px">×</button>
+    </span>`;
+  }).join('');
+  const options = _ua_roles_cache
+    .filter(r => !assigned.has(r.id))
+    .map(r => `<option value="${r.id}">${r.name}</option>`)
+    .join('');
+  const addControl = options
+    ? `<select class="ua-add-select" data-ua-user="${userId}" style="padding:3px 6px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:3px;font-size:11px">
+         <option value="">+ Add role…</option>${options}
+       </select>`
+    : `<span style="font-size:11px;color:var(--muted)">(all roles assigned)</span>`;
+  cell.innerHTML = `<div class="ua-chips">${chipsHtml}</div><div style="margin-top:6px">${addControl}</div>`;
+  // Re-bind listeners on the fresh elements
+  cell.querySelectorAll('.ua-chip-remove').forEach(el => {
+    el.addEventListener('click', () => uaRemoveRole(
+      Number(el.dataset.uaUser), Number(el.dataset.uaRole)
+    ));
+  });
+  cell.querySelectorAll('.ua-add-select').forEach(el => {
+    el.addEventListener('change', (ev) => {
+      const roleId = Number(ev.target.value);
+      if (roleId) uaAddRole(Number(el.dataset.uaUser), roleId);
+    });
+  });
 }
 
 async function uaSave(userId) {
   const msgEl = document.getElementById('ua-msg');
-  const checked = Array.from(document.querySelectorAll(`[data-ua-user="${userId}"]:checked`))
-    .map(el => Number(el.dataset.uaRole));
+  const ids = Array.from(_ua_assigned.get(userId) || []);
   try {
     const r = await fetch(`/api/settings/users/${userId}/roles`, {
       method: 'POST',
       headers: {'Content-Type':'application/json', 'X-Requested-With':'CommandNexus'},
-      body: JSON.stringify({role_ids: checked}),
+      body: JSON.stringify({role_ids: ids}),
     });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     if (msgEl) {
       msgEl.textContent = 'Saved';
-      msgEl.style.color = 'var(--green)';
+      msgEl.style.color = 'var(--success)';
       setTimeout(() => { msgEl.textContent = ''; }, 2500);
     }
   } catch (e) {
     if (msgEl) {
       msgEl.textContent = 'Save failed: ' + e.message;
-      msgEl.style.color = 'var(--red)';
+      msgEl.style.color = 'var(--danger)';
     }
   }
 }
