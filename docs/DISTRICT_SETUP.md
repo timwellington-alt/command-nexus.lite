@@ -222,8 +222,16 @@ Add-account form at the bottom: email, display name, password
 - Name it `nexus-runtime`; you can skip granting Project roles (Nexus
   doesn't use GCP for compute, only DWD).
 - Click into the newly-created account, then **Keys → Add Key → Create
-  new key → JSON**. Save the file — you'll copy it to the Nexus host
-  in a later step as `secrets/google_service_account.json`.
+  new key → JSON**. Save the file somewhere you can open it in a text
+  editor later — Nexus has two ways to consume it:
+    - **Recommended**: paste the full JSON into Settings → General →
+      Google Workspace → *Service Account JSON key* once you're logged
+      in. Stored encrypted in the database. No shell access needed to
+      the host.
+    - **Alternative** (classic docker-secrets flow): copy the file to
+      the Nexus host as `secrets/google_service_account.json` before
+      first boot. Both paths work; the Settings paste wins if both
+      exist.
 
 ## 3. Enable Domain-Wide Delegation
 

@@ -79,9 +79,12 @@ below.
 
 If you want Google SSO, set `GOOGLE_AUTH_ENABLED=true` in `.env` before
 running `first_run.sh` and it'll prompt for the OAuth client ID +
-secret. Backend Google features (Directory API, Gmail attendance,
-Sheets sync) additionally need a service account at
-`secrets/google_service_account.json`.
+secret. Backend Google features (Directory API, Gmail, Sheets, Drive)
+additionally need a service account — follow the 4-step walkthrough in
+[docs/DISTRICT_SETUP.pdf](docs/DISTRICT_SETUP.pdf) § "Google service
+account setup", then paste the downloaded JSON key into Settings →
+General → Google Workspace → *Service Account JSON key* once you're
+logged in.
 
 ## TLS — pick one path
 
