@@ -59,21 +59,15 @@ class GoogleDriveAdapter:
         Shared Drive. This avoids needing the Drive scope in domain-wide
         delegation.
         """
-        cred_file = os.environ.get(
-            "GOOGLE_SERVICE_ACCOUNT_FILE",
-            "/run/secrets/google_service_account.json",
+        from app.integrations.google.credentials import load_service_account_credentials
+        creds = await load_service_account_credentials(
+            self.db, scopes=["https://www.googleapis.com/auth/drive"],
         )
-        if not os.path.exists(cred_file):
-            raise RuntimeError("Google service account file not found")
+        if not creds:
+            raise RuntimeError("Google service account not configured")
 
         def _build():
-            from google.oauth2 import service_account
             from googleapiclient.discovery import build
-
-            creds = service_account.Credentials.from_service_account_file(
-                cred_file,
-                scopes=["https://www.googleapis.com/auth/drive"],
-            )
             return build("drive", "v3", credentials=creds, cache_discovery=False)
 
         return await asyncio.to_thread(_build)

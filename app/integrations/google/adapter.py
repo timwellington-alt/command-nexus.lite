@@ -37,33 +37,33 @@ class GoogleWorkspaceAdapter:
     def __init__(self, db):
         self.db = db
 
-    async def _get_service(self):
-        """Build Admin SDK service from stored credentials."""
+    async def _resolve_sa_credentials(self, scopes: list[str]):
+        """Build DWD-impersonating service-account Credentials via the
+        shared loader (app/integrations/google/credentials.py).
+        Returns None if admin_email is unset or no SA key is available."""
         from app.modules.settings.repository import get_setting_value
-        import os
+        from app.integrations.google.credentials import load_service_account_credentials
 
         admin_email = await get_setting_value(self.db, "google", "admin_email")
-        cred_file = os.environ.get("GOOGLE_SERVICE_ACCOUNT_FILE", "/run/secrets/google_service_account.json")
-
-        if not admin_email or not os.path.exists(cred_file):
-            raise RuntimeError("Google Workspace not configured")
-
-        from google.oauth2 import service_account
-        from googleapiclient.discovery import build
-
-        creds = (
-            service_account.Credentials
-            .from_service_account_file(
-                cred_file,
-                scopes=["https://www.googleapis.com/auth/admin.directory.user",
-                         "https://www.googleapis.com/auth/admin.directory.group",
-                         "https://www.googleapis.com/auth/admin.directory.group.member",
-                         "https://www.googleapis.com/auth/admin.directory.orgunit.readonly",
-                         "https://www.googleapis.com/auth/apps.groups.settings",
-                         "https://www.googleapis.com/auth/apps.licensing"],
-            )
-            .with_subject(admin_email)
+        if not admin_email:
+            return None
+        return await load_service_account_credentials(
+            self.db, scopes=scopes, subject=admin_email,
         )
+
+    async def _get_service(self):
+        """Build Admin SDK service from stored credentials."""
+        creds = await self._resolve_sa_credentials([
+            "https://www.googleapis.com/auth/admin.directory.user",
+            "https://www.googleapis.com/auth/admin.directory.group",
+            "https://www.googleapis.com/auth/admin.directory.group.member",
+            "https://www.googleapis.com/auth/admin.directory.orgunit.readonly",
+            "https://www.googleapis.com/auth/apps.groups.settings",
+            "https://www.googleapis.com/auth/apps.licensing",
+        ])
+        if not creds:
+            raise RuntimeError("Google Workspace not configured")
+        from googleapiclient.discovery import build
         return build("admin", "directory_v1", credentials=creds, cache_discovery=False)
 
     async def _get_licensing_service(self):
@@ -74,28 +74,12 @@ class GoogleWorkspaceAdapter:
         happens to lose the scope. The subject admin (google.admin_email
         setting) must hold a License Management-capable role in Admin
         Console — a plain "User Management Admin" role is NOT enough."""
-        from app.modules.settings.repository import get_setting_value
-        import os
-
-        admin_email = await get_setting_value(self.db, "google", "admin_email")
-        nexus_cred = os.environ.get("GOOGLE_SERVICE_ACCOUNT_FILE", "/run/secrets/google_service_account.json")
-        gam_cred = "/run/secrets/gam_service_account.json"
-        cred_file = nexus_cred if os.path.exists(nexus_cred) else gam_cred
-
-        if not admin_email or not os.path.exists(cred_file):
+        creds = await self._resolve_sa_credentials([
+            "https://www.googleapis.com/auth/apps.licensing",
+        ])
+        if not creds:
             raise RuntimeError("Google Workspace not configured")
-
-        from google.oauth2 import service_account
         from googleapiclient.discovery import build
-
-        creds = (
-            service_account.Credentials
-            .from_service_account_file(
-                cred_file,
-                scopes=["https://www.googleapis.com/auth/apps.licensing"],
-            )
-            .with_subject(admin_email)
-        )
         return build("licensing", "v1", credentials=creds, cache_discovery=False)
 
     async def remove_license(
@@ -356,21 +340,12 @@ class GoogleWorkspaceAdapter:
 
     async def _get_groups_settings_service(self):
         """Build Groups Settings API service."""
-        from app.modules.settings.repository import get_setting_value
-        import os
-        from google.oauth2 import service_account
+        creds = await self._resolve_sa_credentials([
+            "https://www.googleapis.com/auth/apps.groups.settings",
+        ])
+        if not creds:
+            raise RuntimeError("Google Workspace not configured")
         from googleapiclient.discovery import build
-
-        admin_email = await get_setting_value(self.db, "google", "admin_email")
-        cred_file = os.environ.get("GOOGLE_SERVICE_ACCOUNT_FILE", "/run/secrets/google_service_account.json")
-        creds = (
-            service_account.Credentials
-            .from_service_account_file(
-                cred_file,
-                scopes=["https://www.googleapis.com/auth/apps.groups.settings"],
-            )
-            .with_subject(admin_email)
-        )
         return build("groupssettings", "v1", credentials=creds, cache_discovery=False)
 
     async def create_group(self, group_email: str) -> dict:

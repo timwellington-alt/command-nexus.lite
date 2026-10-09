@@ -40,31 +40,27 @@ class GoogleSheetsAdapter:
         Workspace Admin's domain-wide delegation.
         """
         from app.modules.settings.repository import get_setting_value
-
-        cred_file = os.environ.get("GOOGLE_SERVICE_ACCOUNT_FILE", "/run/secrets/google_service_account.json")
-        if not os.path.exists(cred_file):
-            raise RuntimeError("Google service account not configured")
-
-        from google.oauth2 import service_account
+        from app.integrations.google.credentials import load_service_account_credentials
         from googleapiclient.discovery import build
 
         if write:
-            creds = service_account.Credentials.from_service_account_file(
-                cred_file,
+            # No subject — writes use the SA's own identity. Target
+            # sheets must be shared with the SA email as editor.
+            creds = await load_service_account_credentials(
+                self.db,
                 scopes=["https://www.googleapis.com/auth/spreadsheets"],
             )
         else:
             admin_email = await get_setting_value(self.db, "google", "admin_email")
             if not admin_email:
                 raise RuntimeError("Google admin_email not configured")
-            creds = (
-                service_account.Credentials
-                .from_service_account_file(
-                    cred_file,
-                    scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"],
-                )
-                .with_subject(admin_email)
+            creds = await load_service_account_credentials(
+                self.db,
+                scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"],
+                subject=admin_email,
             )
+        if not creds:
+            raise RuntimeError("Google service account not configured")
         return build("sheets", "v4", credentials=creds, cache_discovery=False)
 
     async def read_sheet(self, sheet_id: str, tab_range: str = "A1:Z1000") -> list[list[str]]:

@@ -221,31 +221,40 @@ async def _test_switch_telnet(db) -> dict:
 # will automatically pick it up.
 
 async def _test_hr_sheets(db) -> dict:
-    """Test Google Sheets API access for HR intake data."""
-    import asyncio
+    """Test Google Sheets API access by reading the first configured
+    per-building HR Google Sheet. Lite reconfigured hr_sheets.buildings
+    to a per-building JSON map (see Settings → HR Google Sheets), so
+    we grab whichever is first + do a cheap spreadsheets.get() against it."""
+    import asyncio, json
     from app.modules.settings.repository import get_setting_value
-    import os
+    from app.integrations.google.credentials import load_service_account_credentials
 
-    sheet_id = await get_setting_value(db, "google", "hr_sheet_id")
     admin_email = await get_setting_value(db, "google", "admin_email")
-    cred_file = os.environ.get("GOOGLE_SERVICE_ACCOUNT_FILE", "/run/secrets/google_service_account.json")
+    raw = await get_setting_value(db, "hr_sheets", "buildings")
+    try:
+        sheets_cfg = json.loads(raw or "{}")
+    except Exception:
+        sheets_cfg = {}
+    sheet_id = next(
+        (v.get("sheet_id") for v in sheets_cfg.values() if (v or {}).get("sheet_id")),
+        None,
+    )
 
     if not sheet_id:
-        return {"status": "error", "message": "HR Sheet ID not configured (google.hr_sheet_id)"}
-    if not admin_email or not os.path.exists(cred_file):
-        return {"status": "error", "message": "Google service account not configured"}
+        return {"status": "error", "message": "No HR sheets configured — add one in Settings → HR Google Sheets"}
+    if not admin_email:
+        return {"status": "error", "message": "google.admin_email not configured"}
+
+    creds = await load_service_account_credentials(
+        db,
+        scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"],
+        subject=admin_email,
+    )
+    if not creds:
+        return {"status": "error", "message": "Google service account not configured — paste JSON key in Settings → Google Workspace"}
 
     def _test():
-        from google.oauth2 import service_account
         from googleapiclient.discovery import build
-        creds = (
-            service_account.Credentials
-            .from_service_account_file(
-                cred_file,
-                scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"],
-            )
-            .with_subject(admin_email)
-        )
         service = build("sheets", "v4", credentials=creds, cache_discovery=False)
         result = service.spreadsheets().get(spreadsheetId=sheet_id).execute()
         title = result.get("properties", {}).get("title", "?")
